@@ -153,6 +153,7 @@ optionsData = {
   totalOI: totalCallOI + totalPutOI
 };          
           console.log('Options IV:', avgIV);
+}
         } else {
           const errorText = await optionsResponse.text();
           console.log('Polygon options error:', optionsResponse.status, errorText);
