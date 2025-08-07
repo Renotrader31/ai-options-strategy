@@ -75,50 +75,83 @@ export async function POST(request) {
         
         const optionsResponse = await fetch(optionsUrl);
         console.log('Options response status:', optionsResponse.status);
-        
-        if (optionsResponse.ok) {
-          const optData = await optionsResponse.json();
-          const results = optData.results || [];
-          console.log('Options chains received:', results.length);
+if (optionsResponse.ok) {
+  const optData = await optionsResponse.json();
+  const results = optData.results || [];
+  
+  // If no options data, use stock-based estimates
+  if (results.length === 0) {
+    console.log('No options data available for', symbol);
+    // Estimate IV based on stock price movement
+    const priceChange = Math.abs(stockData.changePercent || 0);
+    const estimatedIV = Math.max(15, Math.min(100, priceChange * 10));
+    
+    optionsData = {
+      iv: estimatedIV,
+      ivRank: calculateIVRank(estimatedIV),
+      putCallRatio: 1,
+      callVolume: 0,
+      putVolume: 0,
+      callOI: 0,
+      putOI: 0,
+      atmStrike: Math.round(stockData.price / 5) * 5,
+      totalVolume: 0,
+      totalOI: 0
+    };
+  } else {
+    // Process options normally (the code we fixed above)        
           
-          // Calculate options metrics
-          const calls = results.filter(opt => opt.details?.contract_type === 'call');
-          const puts = results.filter(opt => opt.details?.contract_type === 'put');
-          
-          console.log('Calls:', calls.length, 'Puts:', puts.length);
-          
-          // Find ATM options
-          const atmStrike = Math.round(stockData.price / 5) * 5;
-          const atmCalls = calls.filter(opt => Math.abs(opt.details?.strike_price - atmStrike) < 2.5);
-          const atmPuts = puts.filter(opt => Math.abs(opt.details?.strike_price - atmStrike) < 2.5);
-          
-          // Calculate total volume and OI
-          const totalCallVolume = calls.reduce((sum, opt) => sum + (opt.day?.volume || 0), 0);
-          const totalPutVolume = puts.reduce((sum, opt) => sum + (opt.day?.volume || 0), 0);
-          const totalCallOI = calls.reduce((sum, opt) => sum + (opt.open_interest || 0), 0);
-          const totalPutOI = puts.reduce((sum, opt) => sum + (opt.open_interest || 0), 0);
-          
-          // Get IV from ATM options
-          const atmIVs = [...atmCalls, ...atmPuts]
-            .map(opt => opt.implied_volatility)
-            .filter(iv => iv > 0);
-          const avgIV = atmIVs.length > 0 
-            ? (atmIVs.reduce((a, b) => a + b, 0) / atmIVs.length) * 100
-            : 30;
-          
-          optionsData = {
-            iv: avgIV,
-            ivRank: calculateIVRank(avgIV),
-            putCallRatio: totalCallVolume > 0 ? totalPutVolume / totalCallVolume : 1,
-            callVolume: totalCallVolume,
-            putVolume: totalPutVolume,
-            callOI: totalCallOI,
-            putOI: totalPutOI,
-            atmStrike: atmStrike,
-            totalVolume: totalCallVolume + totalPutVolume,
-            totalOI: totalCallOI + totalPutOI
-          };
-          
+// Calculate options metrics
+const calls = results.filter(opt => opt.details?.contract_type === 'call');
+const puts = results.filter(opt => opt.details?.contract_type === 'put');
+
+console.log('Calls:', calls.length, 'Puts:', puts.length);
+
+// Find ATM options
+const atmStrike = Math.round(stockData.price / 5) * 5;
+const atmCalls = calls.filter(opt => Math.abs(opt.details?.strike_price - atmStrike) < 2.5);
+const atmPuts = puts.filter(opt => Math.abs(opt.details?.strike_price - atmStrike) < 2.5);
+
+// Calculate total volume and OI
+const totalCallVolume = calls.reduce((sum, opt) => sum + (opt.day?.volume || 0), 0);
+const totalPutVolume = puts.reduce((sum, opt) => sum + (opt.day?.volume || 0), 0);
+const totalCallOI = calls.reduce((sum, opt) => sum + (opt.open_interest || 0), 0);
+const totalPutOI = puts.reduce((sum, opt) => sum + (opt.open_interest || 0), 0);
+
+// Get IV from ATM options - FIXED VERSION
+const atmIVs = [...atmCalls, ...atmPuts]
+  .map(opt => opt.implied_volatility)
+  .filter(iv => iv && iv > 0);
+
+// Calculate average IV with better fallback
+let avgIV = 30; // Default IV
+if (atmIVs.length > 0) {
+  avgIV = (atmIVs.reduce((a, b) => a + b, 0) / atmIVs.length) * 100;
+} else if (results.length > 0) {
+  // Try to get IV from any available options
+  const allIVs = results
+    .map(opt => opt.implied_volatility)
+    .filter(iv => iv && iv > 0);
+  if (allIVs.length > 0) {
+    avgIV = (allIVs.reduce((a, b) => a + b, 0) / allIVs.length) * 100;
+  }
+}
+
+// Calculate Put/Call ratio with safety check
+const putCallRatio = totalCallVolume > 0 ? totalPutVolume / totalCallVolume : 1;
+
+optionsData = {
+  iv: avgIV,
+  ivRank: calculateIVRank(avgIV),
+  putCallRatio: putCallRatio,
+  callVolume: totalCallVolume,
+  putVolume: totalPutVolume,
+  callOI: totalCallOI,
+  putOI: totalPutOI,
+  atmStrike: atmStrike,
+  totalVolume: totalCallVolume + totalPutVolume,
+  totalOI: totalCallOI + totalPutOI
+};          
           console.log('Options IV:', avgIV);
         } else {
           const errorText = await optionsResponse.text();
