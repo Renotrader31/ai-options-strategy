@@ -42,7 +42,7 @@ const generateMockData = (symbol) => {
   };
 };
 
-// Complete strategy definitions with calculations
+// Complete strategy definitions with calculations - INCLUDING ADVANCED STRATEGIES
 const strategies = {
   longCall: {
     name: 'Long Call',
@@ -200,9 +200,8 @@ const strategies = {
         maxProfit: `$${(maxProfit * 100).toFixed(2)}`
       };
     }
-  }
-};
-// Add these after the existing strategies (after coveredCall)
+  },
+  // ADVANCED STRATEGIES
   ironButterfly: {
     name: 'Iron Butterfly',
     type: 'neutral',
@@ -240,7 +239,6 @@ const strategies = {
     calculate: (stockData) => {
       const putStrike = Math.round(stockData.price * 0.95 / 5) * 5;
       const callStrike1 = Math.round(stockData.price * 1.02 / 5) * 5;
-      const callStrike2 = callStrike1 + 5;
       const credit = stockData.price * 0.025;
       const maxLoss = putStrike - credit;
       return {
@@ -288,7 +286,7 @@ const strategies = {
     greeks: { delta: '+', gamma: '0', theta: '+', vega: '-' },
     calculate: (stockData) => {
       const atmStrike = Math.round(stockData.price / 5) * 5;
-      const debit = stockData.price * 0.005; // Often done for credit
+      const debit = stockData.price * 0.005;
       return {
         maxProfit: `$${(500 - debit * 100).toFixed(2)}`,
         maxLoss: debit > 0 ? `$${(debit * 100).toFixed(2)}` : 'None (credit received)',
@@ -321,41 +319,72 @@ const strategies = {
       };
     }
   }
-// Enhanced recommendation generator
+};
+
+// Enhanced recommendation generator with advanced strategies
 const generateRecommendations = (stockData, marketConditions) => {
   const recommendations = [];
   const ivRank = stockData?.ivRank || 50;
   const trend = marketConditions?.trend || 'neutral';
   const flowSentiment = marketConditions?.flowSentiment || 'neutral';
   const unusualOptions = marketConditions?.unusualOptions || 0;
+  const movement = marketConditions?.movement || 'neutral';
+  
+  // JADE LIZARD - Perfect when IV > 50 and slightly bullish
+  if (ivRank > 50 && (trend === 'bullish' || flowSentiment === 'bullish')) {
+    recommendations.push({
+      ...strategies.jadeLizard,
+      winRate: 70 + Math.floor(Math.random() * 10),
+      priority: 1,
+      reason: `🦎 JADE LIZARD SETUP! High IV (${ivRank}) + Bullish bias = No upside risk strategy!`
+    });
+  }
   
   // HIGH IV STRATEGIES (>70)
   if (ivRank > 70) {
     recommendations.push({ 
       ...strategies.ironCondor, 
       winRate: 75 + Math.floor(Math.random() * 10),
-      priority: 1,
+      priority: 2,
       reason: `Very high IV Rank (${ivRank}) - Perfect for premium selling`
     });
+    
+    // IRON BUTTERFLY for extreme IV
+    if (movement === 'stable') {
+      recommendations.push({
+        ...strategies.ironButterfly,
+        winRate: 75 + Math.floor(Math.random() * 10),
+        priority: 1,
+        reason: `Stable movement + High IV = Perfect Iron Butterfly setup`
+      });
+    }
     
     if (trend === 'bullish' || trend === 'strongly bullish') {
       recommendations.push({ 
         ...strategies.bullPutSpread, 
         winRate: 70 + Math.floor(Math.random() * 10),
-        priority: 2,
+        priority: 3,
         reason: 'Bullish trend + high IV = Sell put spreads'
       });
     } else if (trend === 'bearish' || trend === 'strongly bearish') {
       recommendations.push({ 
         ...strategies.bearCallSpread, 
         winRate: 70 + Math.floor(Math.random() * 10),
-        priority: 2,
+        priority: 3,
         reason: 'Bearish trend + high IV = Sell call spreads'
       });
     }
   }
   // LOW IV STRATEGIES (<30)
   else if (ivRank < 30) {
+    // CALENDAR SPREAD for IV expansion
+    recommendations.push({
+      ...strategies.calendarSpread,
+      winRate: 60 + Math.floor(Math.random() * 10),
+      priority: 2,
+      reason: `Low IV (${ivRank}) = Potential IV expansion with Calendar Spread`
+    });
+    
     if (unusualOptions > 10) {
       recommendations.push({ 
         ...strategies.longStraddle, 
@@ -369,20 +398,38 @@ const generateRecommendations = (stockData, marketConditions) => {
       recommendations.push({ 
         ...strategies.longCall, 
         winRate: 65 + Math.floor(Math.random() * 10),
-        priority: unusualOptions > 10 ? 2 : 1,
+        priority: 3,
         reason: `Low IV (${ivRank}) makes calls cheap - bullish trend`
+      });
+      
+      // BROKEN WING BUTTERFLY for cheap directional play
+      recommendations.push({
+        ...strategies.brokenWingButterfly,
+        winRate: 55 + Math.floor(Math.random() * 10),
+        priority: 4,
+        reason: 'Asymmetric bullish play with limited risk'
       });
     } else if (trend === 'bearish' || trend === 'strongly bearish') {
       recommendations.push({ 
         ...strategies.longPut, 
         winRate: 65 + Math.floor(Math.random() * 10),
-        priority: unusualOptions > 10 ? 2 : 1,
+        priority: 3,
         reason: `Low IV (${ivRank}) makes puts cheap - bearish trend`
       });
     }
   }
   // MEDIUM IV STRATEGIES (30-70)
   else {
+    if (movement === 'stable') {
+      // DOUBLE DIAGONAL for range-bound income
+      recommendations.push({
+        ...strategies.doubleDiagonal,
+        winRate: 65 + Math.floor(Math.random() * 10),
+        priority: 2,
+        reason: 'Range-bound market perfect for Double Diagonal income'
+      });
+    }
+    
     if (trend === 'bullish' || flowSentiment === 'bullish') {
       recommendations.push({ 
         ...strategies.bullPutSpread, 
@@ -393,7 +440,7 @@ const generateRecommendations = (stockData, marketConditions) => {
       recommendations.push({ 
         ...strategies.longCall, 
         winRate: 62 + Math.floor(Math.random() * 10),
-        priority: 2,
+        priority: 3,
         reason: 'Directional play for upside'
       });
     } else if (trend === 'bearish' || flowSentiment === 'bearish') {
@@ -406,7 +453,7 @@ const generateRecommendations = (stockData, marketConditions) => {
       recommendations.push({ 
         ...strategies.longPut, 
         winRate: 62 + Math.floor(Math.random() * 10),
-        priority: 2,
+        priority: 3,
         reason: 'Directional play for downside'
       });
     } else {
@@ -419,45 +466,12 @@ const generateRecommendations = (stockData, marketConditions) => {
       recommendations.push({ 
         ...strategies.coveredCall, 
         winRate: 63 + Math.floor(Math.random() * 10),
-        priority: 2,
+        priority: 3,
         reason: 'Conservative income strategy'
       });
     }
   }
-  // Add these special conditions after the existing IV-based logic
   
-  // JADE LIZARD - Perfect when IV > 50 and slightly bullish
-  if (ivRank > 50 && (trend === 'bullish' || flowSentiment === 'bullish')) {
-    const jadeLizardExists = recommendations.find(r => r.name === 'Jade Lizard');
-    if (!jadeLizardExists) {
-      recommendations.push({
-        ...strategies.jadeLizard,
-        winRate: 70 + Math.floor(Math.random() * 10),
-        priority: 1,
-        reason: `🦎 JADE LIZARD SETUP! High IV (${ivRank}) + Bullish bias = No upside risk strategy!`
-      });
-    }
-  }
-  
-  // IRON BUTTERFLY - When expecting minimal movement
-  if (marketConditions?.movement === 'stable' && ivRank > 40) {
-    recommendations.push({
-      ...strategies.ironButterfly,
-      winRate: 75 + Math.floor(Math.random() * 10),
-      priority: 2,
-      reason: `Stable movement + decent IV = Perfect Iron Butterfly setup`
-    });
-  }
-  
-  // CALENDAR SPREAD - IV expansion play
-  if (ivRank < 40 && marketConditions?.movement !== 'volatile') {
-    recommendations.push({
-      ...strategies.calendarSpread,
-      winRate: 60 + Math.floor(Math.random() * 10),
-      priority: 3,
-      reason: `Low IV (${ivRank}) = Potential IV expansion with Calendar Spread`
-    });
-  }
   // Ensure uniqueness and sort
   const uniqueRecommendations = Array.from(
     new Map(recommendations.map(item => [item.name, item])).values()
@@ -519,7 +533,7 @@ export default function AIOptionsStrategy() {
     return { contracts, totalCost };
   };
   
-  // Calculate specific strikes for strategies
+  // Calculate specific strikes for strategies - UPDATED WITH ADVANCED STRATEGIES
   const calculateStrikes = (strategy) => {
     if (!stockData) return null;
     
@@ -579,18 +593,9 @@ export default function AIOptionsStrategy() {
           action: `Own 100 shares + Sell ${atmStrike + 5} Call`
         };
         
-      default:
+      case 'Iron Butterfly':
         return {
           primary: atmStrike,
-          expiry: '30-45 DTE',
-          action: 'Custom strategy'
-        };
-    }
-  };
-  case 'Iron Butterfly':
-        return {
-          putStrike: atmStrike,
-          callStrike: atmStrike,
           wingSpread: `${atmStrike - 10}/${atmStrike + 10}`,
           expiry: '30-45 DTE',
           action: `Sell ${atmStrike} Call & Put / Buy ${atmStrike - 10} Put / Buy ${atmStrike + 10} Call`
@@ -610,10 +615,36 @@ export default function AIOptionsStrategy() {
         
       case 'Calendar Spread':
         return {
-          strike: atmStrike,
+          primary: atmStrike,
           expiry: 'Sell 30 DTE / Buy 60 DTE',
           action: `Sell ${atmStrike} Call (30 DTE) / Buy ${atmStrike} Call (60 DTE)`
         };
+        
+      case 'Broken Wing Butterfly':
+        return {
+          primary: atmStrike,
+          wings: `${atmStrike - 5}/${atmStrike + 10}`,
+          expiry: '30-45 DTE',
+          action: `Buy ${atmStrike - 5} Put / Sell 2x ${atmStrike} Put / Buy ${atmStrike + 10} Put`
+        };
+        
+      case 'Double Diagonal':
+        return {
+          putDiag: `${atmStrike - 5} Put`,
+          callDiag: `${atmStrike + 5} Call`,
+          expiry: 'Sell 30 DTE / Buy 60 DTE',
+          action: `Sell ${atmStrike - 5} Put (30 DTE) + ${atmStrike + 5} Call (30 DTE) / Buy ${atmStrike - 5} Put (60 DTE) + ${atmStrike + 5} Call (60 DTE)`
+        };
+        
+      default:
+        return {
+          primary: atmStrike,
+          expiry: '30-45 DTE',
+          action: 'Custom strategy'
+        };
+    }
+  };
+  
   // Fetch data for a symbol
   const fetchData = useCallback(async (symbol) => {
     setIsLoading(true);
@@ -686,7 +717,7 @@ export default function AIOptionsStrategy() {
             <div>
               <h1 className="text-2xl font-bold">AI Options Strategy Generator</h1>
               <p className="text-sm text-gray-400">
-                {stockData && !error ? 'Live Market Data' : 'Smart options strategies powered by AI'}
+                {stockData && !error ? 'Live Market Data + Advanced Strategies' : 'Smart options strategies powered by AI'}
               </p>
             </div>
           </div>
@@ -897,6 +928,11 @@ export default function AIOptionsStrategy() {
                           <span className="text-yellow-400">{details.breakeven}</span>
                         </div>
                       )}
+                      {details.special && (
+                        <div className="text-center mt-2 text-purple-400 font-medium">
+                          {details.special}
+                        </div>
+                      )}
                     </div>
                     
                     {strategy.reason && (
@@ -1014,6 +1050,9 @@ export default function AIOptionsStrategy() {
                       <div className="bg-gray-900 rounded p-3">
                         <div className="text-xs text-gray-500 mb-1">Action Required:</div>
                         <div className="text-sm font-mono text-green-400">{strikes.action}</div>
+                        {strikes.special && (
+                          <div className="text-sm font-bold text-purple-400 mt-2">{strikes.special}</div>
+                        )}
                       </div>
                       
                       <div className="grid grid-cols-2 gap-3">
@@ -1041,6 +1080,36 @@ export default function AIOptionsStrategy() {
                             <div className="text-lg font-bold text-white">${strikes.callSpread}</div>
                           </div>
                         )}
+                        {strikes.putStrike && (
+                          <div>
+                            <div className="text-xs text-gray-500">Put Strike:</div>
+                            <div className="text-lg font-bold text-white">${strikes.putStrike}</div>
+                          </div>
+                        )}
+                        {strikes.wingSpread && (
+                          <div>
+                            <div className="text-xs text-gray-500">Wing Spread:</div>
+                            <div className="text-lg font-bold text-white">${strikes.wingSpread}</div>
+                          </div>
+                        )}
+                        {strikes.wings && (
+                          <div>
+                            <div className="text-xs text-gray-500">Wings:</div>
+                            <div className="text-lg font-bold text-white">${strikes.wings}</div>
+                          </div>
+                        )}
+                        {strikes.putDiag && (
+                          <div>
+                            <div className="text-xs text-gray-500">Put Diagonal:</div>
+                            <div className="text-lg font-bold text-white">{strikes.putDiag}</div>
+                          </div>
+                        )}
+                        {strikes.callDiag && (
+                          <div>
+                            <div className="text-xs text-gray-500">Call Diagonal:</div>
+                            <div className="text-lg font-bold text-white">{strikes.callDiag}</div>
+                          </div>
+                        )}
                       </div>
                       
                       <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-700">
@@ -1054,7 +1123,7 @@ export default function AIOptionsStrategy() {
                         </div>
                         <div>
                           <div className="text-xs text-gray-500">Breakeven:</div>
-                          <div className="text-sm font-medium text-yellow-400">{details.breakeven || 'N/A'}</div>
+                          <div className="text-sm font-medium text-yellow-400">{details.breakeven || details.profitZone || 'Varies'}</div>
                         </div>
                       </div>
                       
@@ -1069,6 +1138,12 @@ export default function AIOptionsStrategy() {
                           <div className="text-sm font-bold text-red-400">{details.maxLoss || selectedStrategy.maxLoss}</div>
                         </div>
                       </div>
+                      
+                      {details.special && (
+                        <div className="bg-purple-900/20 border border-purple-800 rounded p-3 text-center">
+                          <div className="text-sm font-bold text-purple-400">{details.special}</div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="text-sm text-gray-400">Loading strike prices...</div>
