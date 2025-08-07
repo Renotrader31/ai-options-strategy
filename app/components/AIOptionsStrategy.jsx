@@ -329,9 +329,16 @@ const generateRecommendations = (stockData, marketConditions) => {
   const flowSentiment = marketConditions?.flowSentiment || 'neutral';
   const unusualOptions = marketConditions?.unusualOptions || 0;
   const movement = marketConditions?.movement || 'neutral';
-  
+// ADD THIS DEBUG SECTION
+  console.log('=== STRATEGY SELECTION DEBUG ===');
+  console.log('IV Rank:', ivRank);
+  console.log('Trend:', trend);
+  console.log('Movement:', movement);
+  console.log('Flow Sentiment:', flowSentiment);
+  console.log('Unusual Options:', unusualOptions);
+  console.log('================================');  
   // JADE LIZARD - Perfect when IV > 50 and slightly bullish
-  if (ivRank > 50 && (trend === 'bullish' || flowSentiment === 'bullish')) {
+  if (ivRank > 40 && (trend === 'bullish' || flowSentiment === 'bullish')) {
     recommendations.push({
       ...strategies.jadeLizard,
       winRate: 70 + Math.floor(Math.random() * 10),
@@ -471,7 +478,40 @@ const generateRecommendations = (stockData, marketConditions) => {
       });
     }
   }
-  
+  // FORCE ADD ADVANCED STRATEGIES FOR TESTING
+  if (recommendations.length < 5) {
+    console.log('Force adding advanced strategies for testing');
+    
+    // Always add Jade Lizard if not present
+    if (!recommendations.find(r => r.name === 'Jade Lizard')) {
+      recommendations.push({
+        ...strategies.jadeLizard,
+        winRate: 72,
+        priority: recommendations.length + 1,
+        reason: 'TEST: Showing Jade Lizard strategy'
+      });
+    }
+    
+    // Always add Calendar Spread if not present
+    if (!recommendations.find(r => r.name === 'Calendar Spread')) {
+      recommendations.push({
+        ...strategies.calendarSpread,
+        winRate: 65,
+        priority: recommendations.length + 1,
+        reason: 'TEST: Showing Calendar Spread strategy'
+      });
+    }
+    
+    // Add Iron Butterfly if not present
+    if (!recommendations.find(r => r.name === 'Iron Butterfly')) {
+      recommendations.push({
+        ...strategies.ironButterfly,
+        winRate: 70,
+        priority: recommendations.length + 1,
+        reason: 'TEST: Showing Iron Butterfly strategy'
+      });
+    }
+  }
   // Ensure uniqueness and sort
   const uniqueRecommendations = Array.from(
     new Map(recommendations.map(item => [item.name, item])).values()
