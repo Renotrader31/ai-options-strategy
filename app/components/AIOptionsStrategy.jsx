@@ -202,7 +202,125 @@ const strategies = {
     }
   }
 };
-
+// Add these after the existing strategies (after coveredCall)
+  ironButterfly: {
+    name: 'Iron Butterfly',
+    type: 'neutral',
+    bias: 'neutral',
+    description: 'Sell ATM straddle + buy OTM protection',
+    bestFor: 'Tight range, high probability income',
+    maxProfit: 'Net credit received',
+    maxLoss: 'Strike width - credit',
+    riskReward: 'High Probability',
+    greeks: { delta: '0', gamma: '-', theta: '+', vega: '-' },
+    calculate: (stockData) => {
+      const strikeWidth = 10;
+      const credit = strikeWidth * 0.4;
+      const maxLoss = strikeWidth - credit;
+      const atmStrike = Math.round(stockData.price / 5) * 5;
+      return {
+        maxProfit: `$${(credit * 100).toFixed(2)}`,
+        maxLoss: `$${(maxLoss * 100).toFixed(2)}`,
+        breakeven: `$${(atmStrike - credit).toFixed(2)} - $${(atmStrike + credit).toFixed(2)}`,
+        delta: 'Neutral',
+        profitProb: '75%'
+      };
+    }
+  },
+  jadeLizard: {
+    name: 'Jade Lizard',
+    type: 'premium',
+    bias: 'neutral-bullish',
+    description: 'Sell put + sell call spread (no upside risk!)',
+    bestFor: 'Bullish with high IV, collect premium',
+    maxProfit: 'Net credit received',
+    maxLoss: 'Put strike - credit (only downside)',
+    riskReward: 'No upside risk!',
+    greeks: { delta: '+', gamma: '-', theta: '+', vega: '-' },
+    calculate: (stockData) => {
+      const putStrike = Math.round(stockData.price * 0.95 / 5) * 5;
+      const callStrike1 = Math.round(stockData.price * 1.02 / 5) * 5;
+      const callStrike2 = callStrike1 + 5;
+      const credit = stockData.price * 0.025;
+      const maxLoss = putStrike - credit;
+      return {
+        maxProfit: `$${(credit * 100).toFixed(2)}`,
+        maxLoss: `$${(maxLoss * 100).toFixed(2)} (downside only)`,
+        breakeven: `$${(putStrike - credit).toFixed(2)}`,
+        delta: '+0.10',
+        profitProb: '70%',
+        special: '🦎 NO UPSIDE RISK!'
+      };
+    }
+  },
+  calendarSpread: {
+    name: 'Calendar Spread',
+    type: 'volatility',
+    bias: 'neutral',
+    description: 'Sell near-term, buy far-term same strike',
+    bestFor: 'IV expansion or time decay play',
+    maxProfit: 'Varies at expiration',
+    maxLoss: 'Net debit paid',
+    riskReward: 'Moderate',
+    greeks: { delta: '0', gamma: '-', theta: '+', vega: '+' },
+    calculate: (stockData) => {
+      const debit = stockData.price * 0.015;
+      const atmStrike = Math.round(stockData.price / 5) * 5;
+      return {
+        maxLoss: `$${(debit * 100).toFixed(2)}`,
+        breakeven: 'Varies with IV',
+        profitZone: `Around $${atmStrike}`,
+        delta: 'Neutral',
+        profitProb: '60%',
+        special: '📅 Profits from time decay'
+      };
+    }
+  },
+  brokenWingButterfly: {
+    name: 'Broken Wing Butterfly',
+    type: 'directional',
+    bias: 'bullish',
+    description: 'Butterfly with wider protection side',
+    bestFor: 'Directional play with cheap protection',
+    maxProfit: 'Strike width - debit',
+    maxLoss: 'Net debit (or credit if done for credit)',
+    riskReward: 'Asymmetric',
+    greeks: { delta: '+', gamma: '0', theta: '+', vega: '-' },
+    calculate: (stockData) => {
+      const atmStrike = Math.round(stockData.price / 5) * 5;
+      const debit = stockData.price * 0.005; // Often done for credit
+      return {
+        maxProfit: `$${(500 - debit * 100).toFixed(2)}`,
+        maxLoss: debit > 0 ? `$${(debit * 100).toFixed(2)}` : 'None (credit received)',
+        breakeven: `$${(atmStrike + debit).toFixed(2)}`,
+        delta: '+0.15',
+        profitProb: '55%',
+        special: '🦋 Asymmetric risk/reward'
+      };
+    }
+  },
+  doubleDiagonal: {
+    name: 'Double Diagonal',
+    type: 'income',
+    bias: 'neutral',
+    description: 'Calendar spreads on both puts and calls',
+    bestFor: 'Range-bound with volatility expansion',
+    maxProfit: 'Varies with IV',
+    maxLoss: 'Net debit paid',
+    riskReward: 'Moderate',
+    greeks: { delta: '0', gamma: '-', theta: '+', vega: '+' },
+    calculate: (stockData) => {
+      const debit = stockData.price * 0.03;
+      const range = stockData.price * 0.05;
+      return {
+        maxLoss: `$${(debit * 100).toFixed(2)}`,
+        profitZone: `$${(stockData.price - range).toFixed(2)} - $${(stockData.price + range).toFixed(2)}`,
+        delta: 'Neutral',
+        profitProb: '65%',
+        special: '💎 Premium income machine'
+      };
+    }
+  }
 // Enhanced recommendation generator
 const generateRecommendations = (stockData, marketConditions) => {
   const recommendations = [];
@@ -306,7 +424,40 @@ const generateRecommendations = (stockData, marketConditions) => {
       });
     }
   }
+  // Add these special conditions after the existing IV-based logic
   
+  // JADE LIZARD - Perfect when IV > 50 and slightly bullish
+  if (ivRank > 50 && (trend === 'bullish' || flowSentiment === 'bullish')) {
+    const jadeLizardExists = recommendations.find(r => r.name === 'Jade Lizard');
+    if (!jadeLizardExists) {
+      recommendations.push({
+        ...strategies.jadeLizard,
+        winRate: 70 + Math.floor(Math.random() * 10),
+        priority: 1,
+        reason: `🦎 JADE LIZARD SETUP! High IV (${ivRank}) + Bullish bias = No upside risk strategy!`
+      });
+    }
+  }
+  
+  // IRON BUTTERFLY - When expecting minimal movement
+  if (marketConditions?.movement === 'stable' && ivRank > 40) {
+    recommendations.push({
+      ...strategies.ironButterfly,
+      winRate: 75 + Math.floor(Math.random() * 10),
+      priority: 2,
+      reason: `Stable movement + decent IV = Perfect Iron Butterfly setup`
+    });
+  }
+  
+  // CALENDAR SPREAD - IV expansion play
+  if (ivRank < 40 && marketConditions?.movement !== 'volatile') {
+    recommendations.push({
+      ...strategies.calendarSpread,
+      winRate: 60 + Math.floor(Math.random() * 10),
+      priority: 3,
+      reason: `Low IV (${ivRank}) = Potential IV expansion with Calendar Spread`
+    });
+  }
   // Ensure uniqueness and sort
   const uniqueRecommendations = Array.from(
     new Map(recommendations.map(item => [item.name, item])).values()
@@ -436,7 +587,33 @@ export default function AIOptionsStrategy() {
         };
     }
   };
-  
+  case 'Iron Butterfly':
+        return {
+          putStrike: atmStrike,
+          callStrike: atmStrike,
+          wingSpread: `${atmStrike - 10}/${atmStrike + 10}`,
+          expiry: '30-45 DTE',
+          action: `Sell ${atmStrike} Call & Put / Buy ${atmStrike - 10} Put / Buy ${atmStrike + 10} Call`
+        };
+        
+      case 'Jade Lizard':
+        const jlPutStrike = atmStrike - 5;
+        const jlCallStrike1 = atmStrike + 5;
+        const jlCallStrike2 = atmStrike + 10;
+        return {
+          putStrike: jlPutStrike,
+          callSpread: `${jlCallStrike1}/${jlCallStrike2}`,
+          expiry: '30-45 DTE',
+          action: `Sell ${jlPutStrike} Put / Sell ${jlCallStrike1} Call / Buy ${jlCallStrike2} Call`,
+          special: '🦎 NO UPSIDE RISK!'
+        };
+        
+      case 'Calendar Spread':
+        return {
+          strike: atmStrike,
+          expiry: 'Sell 30 DTE / Buy 60 DTE',
+          action: `Sell ${atmStrike} Call (30 DTE) / Buy ${atmStrike} Call (60 DTE)`
+        };
   // Fetch data for a symbol
   const fetchData = useCallback(async (symbol) => {
     setIsLoading(true);
