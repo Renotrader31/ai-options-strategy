@@ -425,133 +425,176 @@ const strategies = {
 };
 
 // Enhanced recommendation generator with 0DTE
+// Enhanced recommendation generator with better live data handling
 const generateRecommendations = (stockData, marketConditions, zeroDTEData) => {
   const recommendations = [];
   const ivRank = stockData?.ivRank || 50;
   const trend = marketConditions?.trend || 'neutral';
   const flowSentiment = marketConditions?.flowSentiment || 'neutral';
-  const unusualOptions = marketConditions?.unusualOptions || 0;
   const movement = marketConditions?.movement || 'neutral';
+  const changePercent = stockData?.changePercent || 0;
   
-  // 0DTE STRATEGIES - Highest Priority when available
+  console.log('=== RECOMMENDATION ENGINE DEBUG ===');
+  console.log('Stock:', stockData?.symbol);
+  console.log('Price Change:', changePercent + '%');
+  console.log('IV Rank:', ivRank);
+  console.log('Trend:', trend);
+  console.log('Flow Sentiment:', flowSentiment);
+  console.log('Movement:', movement);
+  console.log('0DTE Available:', marketConditions?.has0DTE || zeroDTEData?.available);
+  console.log('===================================');
+  
+  // PRIORITY 1: 0DTE STRATEGIES (if available and during market hours)
   if (marketConditions?.has0DTE || zeroDTEData?.available) {
-    // High volume 0DTE = momentum play
-    if ((marketConditions?.zeroDTEVolume > 5000) || (zeroDTEData?.totalVolume > 5000)) {
-      if (trend === 'bullish' || trend === 'strongly bullish') {
+    if (Math.abs(changePercent) > 0.5) {
+      // Directional 0DTE for trending stocks
+      if (changePercent > 0.5) {
         recommendations.push({
           ...strategies.zeroDTELongCall,
           winRate: 35,
           priority: 1,
-          reason: `⚡ 0DTE MOMENTUM! High volume (${marketConditions?.zeroDTEVolume || zeroDTEData?.totalVolume}) + Bullish = Quick gains possible`
+          reason: `⚡ 0DTE MOMENTUM! Stock up ${changePercent.toFixed(2)}% - Ride the intraday trend!`
         });
-        
-        recommendations.push({
-          ...strategies.zeroDTECallSpread,
-          winRate: 40,
-          priority: 2,
-          reason: '0DTE Call Spread - Defined risk for day trade'
-        });
-      } else if (trend === 'bearish' || trend === 'strongly bearish') {
+      } else if (changePercent < -0.5) {
         recommendations.push({
           ...strategies.zeroDTELongPut,
           winRate: 35,
           priority: 1,
-          reason: `⚡ 0DTE BEARISH! High volume + Bearish trend = Quick profits on downside`
-        });
-        
-        recommendations.push({
-          ...strategies.zeroDTEPutSpread,
-          winRate: 40,
-          priority: 2,
-          reason: '0DTE Put Spread - Defined risk bearish day trade'
+          reason: `⚡ 0DTE BEARISH! Stock down ${Math.abs(changePercent).toFixed(2)}% - Profit from continued selling!`
         });
       }
-    }
-    
-    // Stable price action = Iron Fly
-    if (movement === 'stable' || Math.abs(stockData.changePercent || 0) < 0.5) {
+    } else {
+      // Stable = Iron Fly for theta collection
       recommendations.push({
         ...strategies.zeroDTEIronFly,
         winRate: 68,
         priority: 1,
-        reason: `🎯 0DTE PIN PLAY! Stock stable near $${stockData.price} - Collect maximum theta`
+        reason: `🎯 0DTE PIN PLAY! Stock stable (${changePercent.toFixed(2)}%) - Maximum theta decay!`
       });
     }
   }
   
-  // JADE LIZARD - High IV + Bullish
-  if (ivRank > 50 && (trend === 'bullish' || flowSentiment === 'bullish')) {
-    recommendations.push({
-      ...strategies.jadeLizard,
-      winRate: 70 + Math.floor(Math.random() * 10),
-      priority: recommendations.length + 1,
-      reason: `🦎 JADE LIZARD SETUP! High IV (${ivRank}) + Bullish bias = No upside risk strategy!`
-    });
+  // PRIORITY 2: DIRECTIONAL PLAYS BASED ON MOMENTUM
+  if (Math.abs(changePercent) > 2) {
+    // Strong momentum - use directional strategies
+    if (changePercent > 2) {
+      if (ivRank < 40) {
+        recommendations.push({
+          ...strategies.longCall,
+          winRate: 45,
+          priority: 2,
+          reason: `📈 STRONG BULLISH! Up ${changePercent.toFixed(2)}% with low IV (${ivRank}) - Cheap calls!`
+        });
+      } else {
+        recommendations.push({
+          ...strategies.bullPutSpread,
+          winRate: 70,
+          priority: 2,
+          reason: `📈 BULLISH MOMENTUM! Up ${changePercent.toFixed(2)}% - Collect premium on pullbacks`
+        });
+      }
+    } else if (changePercent < -2) {
+      if (ivRank < 40) {
+        recommendations.push({
+          ...strategies.longPut,
+          winRate: 45,
+          priority: 2,
+          reason: `📉 STRONG BEARISH! Down ${Math.abs(changePercent).toFixed(2)}% with low IV - Cheap puts!`
+        });
+      } else {
+        recommendations.push({
+          ...strategies.bearCallSpread,
+          winRate: 70,
+          priority: 2,
+          reason: `📉 BEARISH MOMENTUM! Down ${Math.abs(changePercent).toFixed(2)}% - Sell rallies`
+        });
+      }
+    }
   }
   
-  // HIGH IV STRATEGIES (>70)
+  // PRIORITY 3: IV-BASED STRATEGIES
   if (ivRank > 70) {
-    recommendations.push({ 
-      ...strategies.ironCondor, 
-      winRate: 75 + Math.floor(Math.random() * 10),
-      priority: recommendations.length + 1,
-      reason: `Very high IV Rank (${ivRank}) - Perfect for premium selling`
+    // Very high IV - premium selling
+    recommendations.push({
+      ...strategies.ironCondor,
+      winRate: 75,
+      priority: 3,
+      reason: `🔥 EXTREME IV RANK (${ivRank})! Premium selling opportunity`
     });
     
-    if (movement === 'stable') {
+    if (changePercent > 0) {
+      recommendations.push({
+        ...strategies.jadeLizard,
+        winRate: 72,
+        priority: 3,
+        reason: `🦎 HIGH IV (${ivRank}) + Bullish bias = Jade Lizard (no upside risk!)`
+      });
+    }
+  } else if (ivRank > 50) {
+    // Moderate-high IV
+    if (Math.abs(changePercent) < 1) {
       recommendations.push({
         ...strategies.ironButterfly,
-        winRate: 75 + Math.floor(Math.random() * 10),
-        priority: recommendations.length + 1,
-        reason: `Stable movement + High IV = Perfect Iron Butterfly setup`
-      });
-    }
-  }
-  // LOW IV STRATEGIES (<30)
-  else if (ivRank < 30) {
-    recommendations.push({
-      ...strategies.calendarSpread,
-      winRate: 60 + Math.floor(Math.random() * 10),
-      priority: recommendations.length + 1,
-      reason: `Low IV (${ivRank}) = Potential IV expansion with Calendar Spread`
-    });
-    
-    if (trend === 'bullish') {
-      recommendations.push({ 
-        ...strategies.longCall, 
-        winRate: 65 + Math.floor(Math.random() * 10),
-        priority: recommendations.length + 1,
-        reason: `Low IV (${ivRank}) makes calls cheap - bullish trend`
-      });
-    }
-  }
-  // MEDIUM IV STRATEGIES
-  else {
-    if (trend === 'bullish' || flowSentiment === 'bullish') {
-      recommendations.push({ 
-        ...strategies.bullPutSpread, 
-        winRate: 68 + Math.floor(Math.random() * 10),
-        priority: recommendations.length + 1,
-        reason: `Bullish sentiment with moderate IV (${ivRank})`
-      });
-    } else if (trend === 'bearish' || flowSentiment === 'bearish') {
-      recommendations.push({ 
-        ...strategies.bearCallSpread, 
-        winRate: 68 + Math.floor(Math.random() * 10),
-        priority: recommendations.length + 1,
-        reason: `Bearish sentiment with moderate IV (${ivRank})`
+        winRate: 70,
+        priority: 3,
+        reason: `🦋 Elevated IV (${ivRank}) + Stable price = Iron Butterfly for income`
       });
     } else {
-      recommendations.push({ 
-        ...strategies.ironCondor, 
-        winRate: 70 + Math.floor(Math.random() * 10),
-        priority: recommendations.length + 1,
-        reason: `Neutral market with moderate IV (${ivRank})`
+      recommendations.push({
+        ...strategies.ironCondor,
+        winRate: 68,
+        priority: 3,
+        reason: `Moderate IV (${ivRank}) - Good for condors`
+      });
+    }
+  } else if (ivRank < 30) {
+    // Low IV - buying strategies
+    recommendations.push({
+      ...strategies.calendarSpread,
+      winRate: 60,
+      priority: 3,
+      reason: `📅 LOW IV (${ivRank}) - Calendar spread for IV expansion`
+    });
+    
+    if (Math.abs(changePercent) > 1) {
+      recommendations.push({
+        ...strategies.longStraddle,
+        winRate: 40,
+        priority: 3,
+        reason: `💥 Low IV (${ivRank}) + Movement = Cheap straddle for big moves`
       });
     }
   }
   
-  // Ensure uniqueness and sort
+  // PRIORITY 4: FLOW-BASED STRATEGIES
+  if (flowSentiment === 'bullish' && trend !== 'bearish') {
+    recommendations.push({
+      ...strategies.bullPutSpread,
+      winRate: 68,
+      priority: 4,
+      reason: `🐂 Bullish flow detected - Bull put spread for income`
+    });
+  } else if (flowSentiment === 'bearish' && trend !== 'bullish') {
+    recommendations.push({
+      ...strategies.bearCallSpread,
+      winRate: 68,
+      priority: 4,
+      reason: `🐻 Bearish flow detected - Bear call spread for income`
+    });
+  }
+  
+  // PRIORITY 5: DEFAULT NEUTRAL STRATEGY
+  if (recommendations.length === 0) {
+    // No strong signals - default to neutral
+    recommendations.push({
+      ...strategies.ironCondor,
+      winRate: 65,
+      priority: 5,
+      reason: `No strong directional bias - Neutral iron condor`
+    });
+  }
+  
+  // Remove duplicates and sort
   const uniqueRecommendations = Array.from(
     new Map(recommendations.map(item => [item.name, item])).values()
   );
@@ -561,6 +604,7 @@ const generateRecommendations = (stockData, marketConditions, zeroDTEData) => {
     return b.winRate - a.winRate;
   });
   
+  console.log('Generated', uniqueRecommendations.length, 'recommendations');
   return uniqueRecommendations.slice(0, 5);
 };
 
