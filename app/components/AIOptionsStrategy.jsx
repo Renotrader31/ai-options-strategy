@@ -1311,13 +1311,14 @@ export default function AIOptionsStrategy() {
                 <ul className="space-y-2 text-sm text-gray-300">
                   <li>• Set stop loss at 50% of max loss</li>
                   <li>• Take profits at 50-75% of max profit</li>
+                  <li>• Set stop loss at 50% of max loss</li>
+                  <li>• Take profits at 50-75% of max profit</li>
                   <li>• Never risk more than {maxRisk}% of account per trade</li>
                   <li>• Monitor position at market open and 30 min before close</li>
                   {selectedStrategy.type === '0dte' && (
                     <li className="text-yellow-400">• ⚡ 0DTE: Must close before market close!</li>
                   )}
                 </ul>
-              </div>
             </div>
           </div>
         )}
