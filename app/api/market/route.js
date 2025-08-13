@@ -213,17 +213,18 @@ async function fetchGreeksData(symbol, expiry) {
         
         // Note: UW Greeks response has aggregate Greeks, not individual
         // We'll use the call Greeks for ATM approximation
-        greeksData = {
-          available: true,
-          atm: {
-            delta: parseFloat(atmOption.call_delta) || 0.5,
-            gamma: parseFloat(atmOption.call_gamma) || 0.01,
-            theta: parseFloat(atmOption.call_theta) || -0.05,
-            vega: parseFloat(atmOption.call_vega) || 0.1,
-            rho: parseFloat(atmOption.call_rho) || 0.05
-          },
-          iv: 0.3 // Default IV, adjust based on your needs
-        };
+       // In fetchGreeksData function, update the Greeks parsing:
+greeksData = {
+  available: true,
+  atm: {
+    delta: parseFloat(atmOption.call_delta) / 1000000 || 0.5,  // UW returns in millions
+    gamma: parseFloat(atmOption.call_gamma) / 1000000 || 0.01,
+    theta: parseFloat(atmOption.call_theta) / 1000000 || -0.05,
+    vega: parseFloat(atmOption.call_vega) / 1000000 || 0.1,
+    rho: 0.05 // Default rho
+  },
+  iv: 0.3 // You might want to calculate this from the options data
+};
       }
     } else {
       const errorText = await response.text();
