@@ -1,386 +1,428 @@
+// app/api/market/route.js
 import { NextResponse } from 'next/server';
 
-export async function POST(request) {
-  try {
-    const { symbol, includeGreeks = false, expiry = null } = await request.json();
-    
-    // DEBUG INFORMATION
-    console.log('=== API ROUTE DEBUG ===');
-    console.log('API Route called for symbol:', symbol);
-    console.log('Include Greeks:', includeGreeks);
-    console.log('Expiry:', expiry);
-    console.log('Polygon Key exists:', !!process.env.POLYGON_API_KEY);
-    console.log('UW Key exists:', !!process.env.UNUSUAL_WHALES_API_KEY);
-    console.log('======================');
-    
-    // Initialize response data
-    let stockData = {};
-    let optionsData = {};
-    let greeksData = {};
-    let flowData = {};
-    let shortData = {};
-    let zeroDTEData = {};
-    
-    // Check if we have any API keys at all
-    if (!process.env.POLYGON_API_KEY && !process.env.FMP_API_KEY && !process.env.UNUSUAL_WHALES_API_KEY) {
-      console.log('No API keys found, returning mock data indicator');
-      return NextResponse.json({ 
-        success: false,
-        useMock: true,
-        message: 'No API keys configured' 
-      });
-    }
-    
-    // 1. POLYGON - Stock Data
-    if (process.env.POLYGON_API_KEY) {
-      try {
-        const polygonKey = process.env.POLYGON_API_KEY;
-        console.log('Fetching Polygon data for', symbol);
-        
-        // Get stock snapshot
-        const stockUrl = `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${polygonKey}`;
-        const stockResponse = await fetch(stockUrl);
-        
-        if (stockResponse.ok) {
-          const data = await stockResponse.json();
-          if (data.ticker) {
-            const ticker = data.ticker;
-            
-            stockData = {
-              symbol: symbol,
-              price: ticker.day?.c || ticker.prevDay?.c || 0,
-              open: ticker.day?.o || 0,
-              high: ticker.day?.h || 0,
-              low: ticker.day?.l || 0,
-              volume: ticker.day?.v || 0,
-              change: ticker.todaysChange || 0,
-              changePercent: ticker.todaysChangePerc || 0,
-              prevClose: ticker.prevDay?.c || 0
-            };
-            
-            console.log('Stock price:', stockData.price);
-          }
-        }
-      } catch (error) {
-        console.error('Polygon error:', error.message);
-      }
-    }
-    
-    // 2. UNUSUAL WHALES - Enhanced Options & Greeks Data
-    if (process.env.UNUSUAL_WHALES_API_KEY) {
-      try {
-        const uwKey = process.env.UNUSUAL_WHALES_API_KEY;
-        const headers = {
-          'Authorization': `Bearer ${uwKey}`,
-          'Accept': 'application/json'
+// API Keys from environment variables
+const API_KEYS = {
+  polygon: process.env.POLYGON_API_KEY,
+  unusualWhales: process.env.UNUSUAL_WHALES_API_KEY,
+  ortex: process.env.ORTEX_API_KEY,
+  fmp: process.env.FMP_API_KEY,
+  twelveData: process.env.TWELVE_DATA_API_KEY,
+  alphaVantage: process.env.ALPHA_VANTAGE_API_KEY
+};
+
+// Cache for API responses (to avoid rate limits)
+const cache = new Map();
+const CACHE_DURATION = 60000; // 1 minute
+
+function getCacheKey(symbol, dataType) {
+  return `${symbol}_${dataType}_${Math.floor(Date.now() / CACHE_DURATION)}`;
+}
+
+// Fetch stock data from multiple sources
+async function fetchStockData(symbol) {
+  const cacheKey = getCacheKey(symbol, 'stock');
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey);
+  }
+
+  let stockData = null;
+
+  // Try Polygon first (real-time data)
+  if (API_KEYS.polygon) {
+    try {
+      const response = await fetch(
+        `https://api.polygon.io/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${API_KEYS.polygon}`
+      );
+      const data = await response.json();
+      
+      if (data.status === 'OK' && data.results?.[0]) {
+        const result = data.results[0];
+        stockData = {
+          symbol,
+          price: result.c,
+          change: result.c - result.o,
+          changePercent: ((result.c - result.o) / result.o) * 100,
+          volume: result.v,
+          high: result.h,
+          low: result.l,
+          open: result.o,
+          close: result.c,
+          timestamp: result.t
         };
-        
-        // Get option chains with Greeks
-        const chainUrl = `https://api.unusualwhales.com/api/stock/${symbol}/option-contracts`;
-        const chainResponse = await fetch(chainUrl, { headers });
-        
-        if (chainResponse.ok) {
-          const chainData = await chainResponse.json();
-          const contracts = chainData.data || [];
-          
-          console.log('UW Option contracts received:', contracts.length);
-          
-          // Find 0DTE options (today's expiry)
-          const today = new Date().toISOString().split('T')[0];
-          const zeroDTEContracts = contracts.filter(c => c.expiry === today);
-          
-          if (zeroDTEContracts.length > 0) {
-            console.log('0DTE contracts found:', zeroDTEContracts.length);
-            
-            // Find ATM 0DTE options
-            const atmStrike = Math.round(stockData.price / 5) * 5;
-            const atm0DTECalls = zeroDTEContracts.filter(c => 
-              c.type === 'call' && Math.abs(c.strike - atmStrike) < 2.5
-            );
-            const atm0DTEPuts = zeroDTEContracts.filter(c => 
-              c.type === 'put' && Math.abs(c.strike - atmStrike) < 2.5
-            );
-            
-            zeroDTEData = {
-              available: true,
-              callCount: zeroDTEContracts.filter(c => c.type === 'call').length,
-              putCount: zeroDTEContracts.filter(c => c.type === 'put').length,
-              atmCallPremium: atm0DTECalls[0]?.ask || 0,
-              atmPutPremium: atm0DTEPuts[0]?.ask || 0,
-              totalVolume: zeroDTEContracts.reduce((sum, c) => sum + (c.volume || 0), 0),
-              totalOI: zeroDTEContracts.reduce((sum, c) => sum + (c.open_interest || 0), 0)
-            };
-          }
-          
-          // Calculate overall options metrics
-          const calls = contracts.filter(c => c.type === 'call');
-          const puts = contracts.filter(c => c.type === 'put');
-          
-          // Get IVs and calculate average
-          const ivs = contracts
-            .map(c => c.implied_volatility)
-            .filter(iv => iv && iv > 0);
-          const avgIV = ivs.length > 0 
-            ? (ivs.reduce((a, b) => a + b, 0) / ivs.length) * 100
-            : 30;
-          
-          // Calculate P/C ratio
-          const totalCallVolume = calls.reduce((sum, c) => sum + (c.volume || 0), 0);
-          const totalPutVolume = puts.reduce((sum, c) => sum + (c.volume || 0), 0);
-          const putCallRatio = totalCallVolume > 0 ? totalPutVolume / totalCallVolume : 1;
-          
-          optionsData = {
-            iv: avgIV,
-            ivRank: calculateIVRank(avgIV),
-            putCallRatio: putCallRatio,
-            callVolume: totalCallVolume,
-            putVolume: totalPutVolume,
-            totalVolume: totalCallVolume + totalPutVolume,
-            atmStrike: Math.round(stockData.price / 5) * 5
-          };
-        }
-        
-        // Get Greeks if requested
-        if (includeGreeks && expiry) {
-          const greeksUrl = `https://api.unusualwhales.com/api/stock/${symbol}/greeks`;
-          const greeksParams = new URLSearchParams({ expiry });
-          
-          const greeksResponse = await fetch(`${greeksUrl}?${greeksParams}`, { headers });
-          
-          if (greeksResponse.ok) {
-            const greeksResponseData = await greeksResponse.json();
-            const greeksArray = greeksResponseData.data || [];
-            
-            console.log('Greeks data received for expiry:', expiry);
-            
-            // Find ATM Greeks
-            const atmStrike = Math.round(stockData.price / 5) * 5;
-            const atmGreeks = greeksArray.find(g => 
-              Math.abs(g.strike - atmStrike) < 2.5
-            );
-            
-            if (atmGreeks) {
-              greeksData = {
-                available: true,
-                atm: {
-                  delta: atmGreeks.delta || 0,
-                  gamma: atmGreeks.gamma || 0,
-                  theta: atmGreeks.theta || 0,
-                  vega: atmGreeks.vega || 0,
-                  rho: atmGreeks.rho || 0
-                },
-                all: greeksArray // Store all Greeks for analysis
-              };
-            }
-          }
-        }
-        
-        // Get options flow
-        const flowUrl = `https://api.unusualwhales.com/api/stock/${symbol}/options-flow`;
-        const flowResponse = await fetch(flowUrl, { headers });
-        
-        if (flowResponse.ok) {
-          const data = await flowResponse.json();
-          const flows = data.data || [];
-          
-          // Analyze recent flow
-          const recentFlows = flows.slice(0, 100);
-          const bullishFlows = recentFlows.filter(f => 
-            f.sentiment === 'BULLISH' || f.type === 'call'
-          ).length;
-          const bearishFlows = recentFlows.filter(f => 
-            f.sentiment === 'BEARISH' || f.type === 'put'
-          ).length;
-          
-          // Find large/unusual trades
-          const unusualFlows = recentFlows.filter(f => 
-            f.volume > f.open_interest * 2 || 
-            f.premium > 1000000 ||
-            f.size > 500
-          );
-          
-          // Check for 0DTE flow
-          const todayFlows = recentFlows.filter(f => {
-            const flowDate = new Date(f.expiry);
-            const today = new Date();
-            return flowDate.toDateString() === today.toDateString();
-          });
-          
-          flowData = {
-            sentiment: bullishFlows > bearishFlows ? 'bullish' : 
-                      bearishFlows > bullishFlows ? 'bearish' : 'neutral',
-            bullishCount: bullishFlows,
-            bearishCount: bearishFlows,
-            unusualActivity: unusualFlows.length,
-            largeOrders: recentFlows.filter(f => f.premium > 100000).length,
-            zeroDTEFlow: todayFlows.length,
-            zeroDTEPremium: todayFlows.reduce((sum, f) => sum + (f.premium || 0), 0)
-          };
-        }
-        
-      } catch (error) {
-        console.error('Unusual Whales error:', error.message);
       }
+    } catch (error) {
+      console.error('Polygon error:', error);
     }
-    
-    // 3. ORTEX - Short Interest Data
-    if (process.env.ORTEX_API_KEY) {
-      try {
-        const ortexKey = process.env.ORTEX_API_KEY;
-        
-        const shortUrl = `https://public.ortex.com/v1/data/short-interest/${symbol}`;
-        const shortResponse = await fetch(shortUrl, {
+  }
+
+  // Fallback to Twelve Data
+  if (!stockData && API_KEYS.twelveData) {
+    try {
+      const response = await fetch(
+        `https://api.twelvedata.com/quote?symbol=${symbol}&apikey=${API_KEYS.twelveData}`
+      );
+      const data = await response.json();
+      
+      if (data.price) {
+        stockData = {
+          symbol,
+          price: parseFloat(data.close),
+          change: parseFloat(data.change),
+          changePercent: parseFloat(data.percent_change),
+          volume: parseInt(data.volume),
+          high: parseFloat(data.high),
+          low: parseFloat(data.low),
+          open: parseFloat(data.open),
+          close: parseFloat(data.close)
+        };
+      }
+    } catch (error) {
+      console.error('Twelve Data error:', error);
+    }
+  }
+
+  // Fallback to Alpha Vantage
+  if (!stockData && API_KEYS.alphaVantage) {
+    try {
+      const response = await fetch(
+        `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${API_KEYS.alphaVantage}`
+      );
+      const data = await response.json();
+      
+      if (data['Global Quote']) {
+        const quote = data['Global Quote'];
+        stockData = {
+          symbol,
+          price: parseFloat(quote['05. price']),
+          change: parseFloat(quote['09. change']),
+          changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
+          volume: parseInt(quote['06. volume']),
+          high: parseFloat(quote['03. high']),
+          low: parseFloat(quote['04. low']),
+          open: parseFloat(quote['02. open']),
+          close: parseFloat(quote['08. previous close'])
+        };
+      }
+    } catch (error) {
+      console.error('Alpha Vantage error:', error);
+    }
+  }
+
+  if (stockData) {
+    cache.set(cacheKey, stockData);
+  }
+  
+  return stockData;
+}
+
+// Fetch options data with Greeks from Unusual Whales
+async function fetchOptionsData(symbol, expiry) {
+  const cacheKey = getCacheKey(symbol, `options_${expiry}`);
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey);
+  }
+
+  let optionsData = null;
+
+  // Unusual Whales - Best for options data
+  if (API_KEYS.unusualWhales) {
+    try {
+      // Get options chain
+      const chainResponse = await fetch(
+        `https://api.unusualwhales.com/api/stock/${symbol}/options/chain`,
+        {
           headers: {
-            'Authorization': ortexKey,
+            'Authorization': `Bearer ${API_KEYS.unusualWhales}`,
             'Accept': 'application/json'
           }
-        });
+        }
+      );
+      
+      const chainData = await chainResponse.json();
+      
+      // Get 0DTE specific data if today's expiry
+      const today = new Date().toISOString().split('T')[0];
+      const is0DTE = expiry === today;
+      
+      if (is0DTE) {
+        // Get 0DTE flow
+        const flowResponse = await fetch(
+          `https://api.unusualwhales.com/api/option-contracts/flow?symbol=${symbol}&date=${today}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${API_KEYS.unusualWhales}`,
+              'Accept': 'application/json'
+            }
+          }
+        );
         
-        if (shortResponse.ok) {
-          const data = await shortResponse.json();
-          const latestData = data.data?.[0] || {};
-          
-          shortData = {
-            shortInterest: latestData.shortInterest || 0,
-            shortInterestPercent: latestData.shortInterestPercentFloat || 0,
-            daysTocover: latestData.daysToCover || 0,
-            utilizationRate: latestData.utilization || 0,
-            costToBorrow: latestData.costToBorrow || 0
+        const flowData = await flowResponse.json();
+        
+        optionsData = {
+          chain: chainData.data || [],
+          zeroDTEFlow: flowData.data || [],
+          is0DTE: true
+        };
+      } else {
+        optionsData = {
+          chain: chainData.data || [],
+          is0DTE: false
+        };
+      }
+      
+      // Process Greeks from the chain
+      if (optionsData.chain.length > 0) {
+        const atmStrike = findATMStrike(optionsData.chain, stockData?.price);
+        const atmOption = optionsData.chain.find(opt => opt.strike === atmStrike);
+        
+        if (atmOption) {
+          optionsData.greeks = {
+            delta: atmOption.delta || 0,
+            gamma: atmOption.gamma || 0,
+            theta: atmOption.theta || 0,
+            vega: atmOption.vega || 0,
+            rho: atmOption.rho || 0,
+            iv: atmOption.implied_volatility || 0
           };
         }
-      } catch (error) {
-        console.error('Ortex error:', error.message);
       }
+    } catch (error) {
+      console.error('Unusual Whales error:', error);
     }
-    
-    // 4. FMP - Backup/Additional data
-    if (process.env.FMP_API_KEY && (!stockData.price || stockData.price === 0)) {
-      try {
-        const fmpKey = process.env.FMP_API_KEY;
+  }
+
+  // Fallback to Polygon for options
+  if (!optionsData && API_KEYS.polygon) {
+    try {
+      const response = await fetch(
+        `https://api.polygon.io/v3/snapshot/options/${symbol}?expiration_date=${expiry}&apiKey=${API_KEYS.polygon}`
+      );
+      const data = await response.json();
+      
+      if (data.results) {
+        optionsData = {
+          chain: data.results,
+          is0DTE: expiry === new Date().toISOString().split('T')[0]
+        };
         
-        const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${fmpKey}`;
-        const quoteResponse = await fetch(quoteUrl);
+        // Extract Greeks from Polygon data
+        const atmContract = data.results.find(r => 
+          Math.abs(r.details.strike_price - stockData?.price) < 5
+        );
         
-        if (quoteResponse.ok) {
-          const data = await quoteResponse.json();
-          const quote = data[0] || {};
-          
-          if (!stockData.price || stockData.price === 0) {
-            stockData = {
-              symbol: symbol,
-              price: quote.price || 0,
-              open: quote.open || 0,
-              high: quote.dayHigh || 0,
-              low: quote.dayLow || 0,
-              volume: quote.volume || 0,
-              change: quote.change || 0,
-              changePercent: quote.changesPercentage || 0,
-              prevClose: quote.previousClose || 0,
-              marketCap: quote.marketCap || 0,
-              pe: quote.pe || 0
-            };
+        if (atmContract?.greeks) {
+          optionsData.greeks = {
+            delta: atmContract.greeks.delta || 0,
+            gamma: atmContract.greeks.gamma || 0,
+            theta: atmContract.greeks.theta || 0,
+            vega: atmContract.greeks.vega || 0,
+            rho: atmContract.greeks.rho || 0,
+            iv: atmContract.implied_volatility || 0
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Polygon options error:', error);
+    }
+  }
+
+  if (optionsData) {
+    cache.set(cacheKey, optionsData);
+  }
+  
+  return optionsData;
+}
+
+// Fetch market conditions and flow data
+async function fetchMarketConditions(symbol) {
+  const cacheKey = getCacheKey(symbol, 'conditions');
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey);
+  }
+
+  let conditions = {
+    trend: 'neutral',
+    movement: 'stable',
+    flowSentiment: 'neutral',
+    unusualOptions: 0,
+    has0DTE: false,
+    zeroDTEVolume: 0,
+    zeroDTEFlow: 0
+  };
+
+  // Unusual Whales flow data
+  if (API_KEYS.unusualWhales) {
+    try {
+      const response = await fetch(
+        `https://api.unusualwhales.com/api/stock/${symbol}/flow/recent`,
+        {
+          headers: {
+            'Authorization': `Bearer ${API_KEYS.unusualWhales}`,
+            'Accept': 'application/json'
           }
         }
-      } catch (error) {
-        console.error('FMP error:', error.message);
+      );
+      
+      const data = await response.json();
+      
+      if (data.data) {
+        const flows = data.data;
+        const bullishFlows = flows.filter(f => f.sentiment === 'bullish').length;
+        const bearishFlows = flows.filter(f => f.sentiment === 'bearish').length;
+        
+        conditions.flowSentiment = bullishFlows > bearishFlows ? 'bullish' : 
+                                  bearishFlows > bullishFlows ? 'bearish' : 'neutral';
+        conditions.unusualOptions = flows.filter(f => f.is_unusual).length;
+        
+        // Check for 0DTE
+        const today = new Date().toISOString().split('T')[0];
+        const zeroDTEFlows = flows.filter(f => f.expiry === today);
+        conditions.has0DTE = zeroDTEFlows.length > 0;
+        conditions.zeroDTEVolume = zeroDTEFlows.reduce((sum, f) => sum + (f.volume || 0), 0);
+        conditions.zeroDTEFlow = zeroDTEFlows.length;
       }
+    } catch (error) {
+      console.error('UW flow error:', error);
     }
+  }
+
+  // Get short interest from ORTEX
+  if (API_KEYS.ortex) {
+    try {
+      const response = await fetch(
+        `https://api.ortex.com/v1/data/short-interest/${symbol}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${API_KEYS.ortex}`,
+            'Accept': 'application/json'
+          }
+        }
+      );
+      
+      const data = await response.json();
+      if (data.data) {
+        conditions.shortInterest = data.data.short_interest_percent || 0;
+        conditions.daysTocover = data.data.days_to_cover || 0;
+      }
+    } catch (error) {
+      console.error('ORTEX error:', error);
+    }
+  }
+
+  cache.set(cacheKey, conditions);
+  return conditions;
+}
+
+// Helper function to find ATM strike
+function findATMStrike(chain, currentPrice) {
+  if (!chain || chain.length === 0 || !currentPrice) return null;
+  
+  let closestStrike = chain[0].strike;
+  let minDiff = Math.abs(chain[0].strike - currentPrice);
+  
+  for (const option of chain) {
+    const diff = Math.abs(option.strike - currentPrice);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closestStrike = option.strike;
+    }
+  }
+  
+  return closestStrike;
+}
+
+// Main API handler
+export async function POST(request) {
+  try {
+    const { symbol, includeGreeks, expiry } = await request.json();
     
-    // Calculate market conditions based on all data
-    const marketConditions = {
-      trend: analyzeTrend(stockData, flowData),
-      movement: optionsData.iv > 50 ? 'volatile' : 
-                optionsData.iv < 25 ? 'stable' : 'neutral',
-      flowSentiment: flowData.sentiment || 'neutral',
-      unusualOptions: flowData.unusualActivity || 0,
-      volumeRatio: stockData.volume / (stockData.avgVolume || stockData.volume || 1),
-      putCallRatio: optionsData.putCallRatio || 1,
-      shortInterestRatio: shortData.shortInterestPercent || 0,
-      shortSqueezePotential: calculateSqueezePotential(shortData, stockData, optionsData),
-      has0DTE: zeroDTEData.available || false,
-      zeroDTEVolume: zeroDTEData.totalVolume || 0,
-      zeroDTEFlow: flowData.zeroDTEFlow || 0
-    };
-    
-    console.log('=== RETURNING DATA ===');
-    console.log('Stock price:', stockData.price);
-    console.log('IV:', optionsData.iv);
-    console.log('Flow sentiment:', flowData.sentiment);
-    console.log('0DTE Available:', zeroDTEData.available);
-    console.log('Greeks Available:', greeksData.available);
-    console.log('=====================');
-    
-    return NextResponse.json({
+    if (!symbol) {
+      return NextResponse.json({
+        success: false,
+        error: 'Symbol is required'
+      });
+    }
+
+    // Fetch all data in parallel
+    const [stockData, optionsData, marketConditions] = await Promise.all([
+      fetchStockData(symbol),
+      includeGreeks ? fetchOptionsData(symbol, expiry || getNext0DTEExpiry()) : null,
+      fetchMarketConditions(symbol)
+    ]);
+
+    // Calculate IV Rank if we have options data
+    let ivRank = 50; // default
+    if (optionsData?.greeks?.iv) {
+      // This would need historical IV data to calculate properly
+      // For now, we'll estimate based on current IV
+      const iv = optionsData.greeks.iv * 100;
+      if (iv > 60) ivRank = 80;
+      else if (iv > 40) ivRank = 60;
+      else if (iv > 25) ivRank = 40;
+      else ivRank = 20;
+    }
+
+    // Build response
+    const response = {
       success: true,
-      stockData: {
+      useMock: false,
+      stockData: stockData ? {
         ...stockData,
-        ...optionsData,
-        ...shortData
-      },
-      optionsData,
-      flowData,
-      shortData,
-      greeksData,
-      zeroDTEData,
+        iv: optionsData?.greeks?.iv ? optionsData.greeks.iv * 100 : 30,
+        ivRank,
+        atmStrike: stockData ? Math.round(stockData.price / 5) * 5 : null,
+        putCallRatio: marketConditions.putCallRatio || 1.0,
+        optionVolume: marketConditions.zeroDTEVolume || 0,
+        openInterest: 0
+      } : null,
       marketConditions,
-      timestamp: new Date().toISOString()
-    });
+      greeksData: optionsData?.greeks ? {
+        available: true,
+        atm: optionsData.greeks
+      } : null,
+      zeroDTEData: {
+        available: marketConditions.has0DTE,
+        callCount: 0,
+        putCount: 0,
+        totalVolume: marketConditions.zeroDTEVolume,
+        totalOI: 0,
+        flows: marketConditions.zeroDTEFlow
+      }
+    };
+
+    // If no data was fetched, indicate to use mock
+    if (!stockData) {
+      response.useMock = true;
+      response.success = false;
+      response.error = 'No data available from APIs';
+    }
+
+    return NextResponse.json(response);
     
   } catch (error) {
-    console.error('=== API ROUTE ERROR ===');
-    console.error('Error:', error.message);
-    console.error('Stack:', error.stack);
-    return NextResponse.json({ 
-      success: false, 
+    console.error('API route error:', error);
+    return NextResponse.json({
+      success: false,
       error: error.message,
-      useMock: true 
+      useMock: true
     });
   }
 }
 
-// Helper functions
-function calculateIVRank(currentIV) {
-  if (currentIV > 80) return 95;
-  if (currentIV > 60) return 80;
-  if (currentIV > 40) return 60;
-  if (currentIV > 25) return 40;
-  return 20;
-}
-
-function analyzeTrend(stockData, flowData) {
-  const priceChange = stockData.changePercent || 0;
-  const flowSentiment = flowData.sentiment;
+// Helper to get today's date for 0DTE
+function getNext0DTEExpiry() {
+  const today = new Date();
+  const day = today.getDay();
   
-  if (priceChange > 2 && flowSentiment === 'bullish') return 'strongly bullish';
-  if (priceChange > 1) return 'bullish';
-  if (priceChange < -2 && flowSentiment === 'bearish') return 'strongly bearish';
-  if (priceChange < -1) return 'bearish';
-  return 'neutral';
-}
-
-function calculateSqueezePotential(shortData, stockData, optionsData) {
-  const shortInterest = shortData.shortInterestPercent || 0;
-  const utilizationRate = shortData.utilizationRate || 0;
-  const costToBorrow = shortData.costToBorrow || 0;
-  const iv = optionsData.iv || 30;
+  // If it's a weekday and market is open, use today
+  // Otherwise use next trading day
+  if (day >= 1 && day <= 5) {
+    return today.toISOString().split('T')[0];
+  }
   
-  let score = 0;
-  if (shortInterest > 20) score += 3;
-  else if (shortInterest > 10) score += 2;
-  else if (shortInterest > 5) score += 1;
-  
-  if (utilizationRate > 90) score += 2;
-  else if (utilizationRate > 70) score += 1;
-  
-  if (costToBorrow > 50) score += 2;
-  else if (costToBorrow > 20) score += 1;
-  
-  if (iv > 100) score += 2;
-  else if (iv > 60) score += 1;
-  
-  if (score >= 8) return 'extreme';
-  if (score >= 6) return 'high';
-  if (score >= 4) return 'moderate';
-  if (score >= 2) return 'low';
-  return 'minimal';
+  // Move to next Monday if weekend
+  const daysToAdd = day === 0 ? 1 : day === 6 ? 2 : 0;
+  today.setDate(today.getDate() + daysToAdd);
+  return today.toISOString().split('T')[0];
 }
