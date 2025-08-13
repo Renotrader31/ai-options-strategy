@@ -424,7 +424,6 @@ const strategies = {
   }
 };
 
-// Enhanced recommendation generator with 0DTE
 // Enhanced recommendation generator with better live data handling
 const generateRecommendations = (stockData, marketConditions, zeroDTEData) => {
   const recommendations = [];
