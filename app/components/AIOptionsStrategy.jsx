@@ -1315,15 +1315,16 @@ export default function AIOptionsStrategy() {
                   <li>• Take profits at 50-75% of max profit</li>
                   <li>• Never risk more than {maxRisk}% of account per trade</li>
                   <li>• Monitor position at market open and 30 min before close</li>
-                  {selectedStrategy.type === '0dte' && (
+                 {selectedStrategy.type === '0dte' && (
                     <li className="text-yellow-400">• ⚡ 0DTE: Must close before market close!</li>
                   )}
                 </ul>
+              </div>
             </div>
           </div>
         )}
       </div>
     </div>
   );
-}  
+}
                  
