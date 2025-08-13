@@ -37,19 +37,28 @@ function isTradingDay() {
 }
 
 // Helper to get next monthly expiry
+// Helper to get next Friday expiry
 function getNextMonthlyExpiry() {
   const today = new Date();
-  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  // Find third Friday of next month
-  const firstDay = nextMonth.getDay();
-  const firstFriday = firstDay <= 5 ? 5 - firstDay : 12 - firstDay;
-  const thirdFriday = firstFriday + 14;
-  nextMonth.setDate(thirdFriday);
+  const dayOfWeek = today.getDay();
   
-  const year = nextMonth.getFullYear();
-  const month = String(nextMonth.getMonth() + 1).padStart(2, '0');
-  const day = String(nextMonth.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  // Calculate days until next Friday (5 = Friday)
+  let daysUntilFriday = (5 - dayOfWeek + 7) % 7;
+  
+  // If today is Friday and market is closed, use next Friday
+  if (daysUntilFriday === 0) {
+    daysUntilFriday = 7;
+  }
+  
+  const nextFriday = new Date(today);
+  nextFriday.setDate(today.getDate() + daysUntilFriday);
+  
+  const year = nextFriday.getFullYear();
+  const month = String(nextFriday.getMonth() + 1).padStart(2, '0');
+  const day = String(nextFriday.getDate()).padStart(2, '0');
+  
+  console.log('Using Friday expiry:', `${year}-${month}-${day}`);
+  return `${year}-${month}-${day}`; // Will return 2025-08-15 for this Friday
 }
 
 // Fetch stock data from multiple sources
