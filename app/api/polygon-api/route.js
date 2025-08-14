@@ -8,7 +8,7 @@ export async function GET(request) {
 
   try {
     const response = await fetch(
-      `https://api.polygon.io/v2/aggs/ticker/${symbol}/prev?adjusted=true&apikey=${process.env.NEXT_PUBLIC_POLYGON_API_KEY}`
+      `https://api.polygon.io/v2/aggs/ticker/${symbol}/prev?adjusted=true&apikey=${process.env.POLYGON_API_KEY}`
     );
     
     const data = await response.json();
