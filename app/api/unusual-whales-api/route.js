@@ -11,9 +11,8 @@ export async function GET(request) {
       `https://api.unusualwhales.com/api/v1/options/flows/${symbol}?limit=20`,
       {
         headers: {
-        'Authorization': `Bearer ${process.env.UW_API_KEY}`
-}
-        },
+          'Authorization': `Bearer ${process.env.UW_API_KEY}`
+        }
       }
     );
     
