@@ -57,13 +57,42 @@ export async function POST(request) {
           const latestCandle = ohlcData.data[ohlcData.data.length - 1];
           const previousCandle = ohlcData.data[ohlcData.data.length - 2];
           
-          currentPrice = parseFloat(latestCandle.close || latestCandle.c || 100);
-          prevClose = parseFloat(previousCandle?.close || previousCandle?.c || currentPrice);
-          
-          // Also check for high/low
-          if (!currentPrice || currentPrice === 100) {
-            currentPrice = parseFloat(latestCandle.h || latestCandle.high || 100);
-          }
+         // In your API route, update the OHLC parsing section (around line 50-60):
+
+// Get the most recent candle
+if (ohlcData.data && ohlcData.data.length > 0) {
+  const latestCandle = ohlcData.data[ohlcData.data.length - 1];
+  const previousCandle = ohlcData.data[ohlcData.data.length - 2];
+  
+  // Prefer close price, then last, then high
+  currentPrice = parseFloat(
+    latestCandle.close || 
+    latestCandle.c || 
+    latestCandle.last ||
+    latestCandle.l ||
+    latestCandle.high ||
+    latestCandle.h ||
+    100
+  );
+  
+  prevClose = parseFloat(
+    previousCandle?.close || 
+    previousCandle?.c || 
+    previousCandle?.last ||
+    currentPrice
+  );
+  
+  change = currentPrice - prevClose;
+  changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
+  
+  console.log('Got price from OHLC:', currentPrice);
+  console.log('Candle data:', {
+    open: latestCandle.open || latestCandle.o,
+    high: latestCandle.high || latestCandle.h,
+    low: latestCandle.low || latestCandle.l,
+    close: latestCandle.close || latestCandle.c
+  });
+}
           
           change = currentPrice - prevClose;
           changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
