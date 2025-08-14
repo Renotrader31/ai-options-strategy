@@ -7,7 +7,7 @@ import {
   ArrowUpRight, ArrowDownRight, ChevronRight,
   Search, RefreshCw, Award, Flame, X,
   LineChart, Loader, AlertTriangle, Clock,
-  Settings, Sliders, WiFi  // Add these if missing
+  Settings, Sliders, WiFiOff  // Add these if missing
 } from 'lucide-react';
 
 // Mock data generator for fallback
