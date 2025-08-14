@@ -919,10 +919,10 @@ export default function AIOptionsStrategy() {
               })}
             </div>
           </div>
+   })}
+          </div>
+        </div>
       )}
-      </div>
-    </div>
-    </div>
     </div>
     
     {/* Strategy Detail Modal */}
@@ -931,6 +931,9 @@ export default function AIOptionsStrategy() {
       isOpen={!!selectedStrategy}
       onClose={() => setSelectedStrategy(null)}
     />
+  </div>
+  );
+}
   </div>
   );
 }
