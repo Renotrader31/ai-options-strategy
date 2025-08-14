@@ -934,6 +934,3 @@ export default function AIOptionsStrategy() {
   </div>
   );
 }
-  </div>
-  );
-}
