@@ -165,7 +165,7 @@ const convertAPIData = (fmpData, polygonData, uwData, symbol) => {
   };
 };
 
-// Strategy definitions (simplified to save space)
+// Strategy definitions
 const strategies = {
   longCall: {
     name: 'Long Call',
@@ -579,7 +579,8 @@ export default function AIOptionsStrategy() {
       </div>
     );
   };
-// Strategy Detail Modal Component
+
+  // Strategy Detail Modal Component
   const StrategyModal = ({ strategy, isOpen, onClose }) => {
     if (!isOpen || !strategy) return null;
     
@@ -676,6 +677,7 @@ export default function AIOptionsStrategy() {
       </div>
     );
   };
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <header className="bg-gray-900 border-b border-gray-800 px-6 py-4">
@@ -916,21 +918,18 @@ export default function AIOptionsStrategy() {
                     )}
                   </div>
                 );
-        )}
-                </div>
-              );
-            })}
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+      
+      {/* Strategy Detail Modal */}
+      <StrategyModal
+        strategy={selectedStrategy}
+        isOpen={!!selectedStrategy}
+        onClose={() => setSelectedStrategy(null)}
+      />
     </div>
-    
-    {/* Strategy Detail Modal */}
-    <StrategyModal
-      strategy={selectedStrategy}
-      isOpen={!!selectedStrategy}
-      onClose={() => setSelectedStrategy(null)}
-    />
-  </div>
   );
 }
