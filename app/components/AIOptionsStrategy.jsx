@@ -4,11 +4,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Brain, TrendingUp, Activity, Shield, Zap,
   DollarSign, Target, AlertCircle, BarChart3, Sparkles,
-  ArrowUpRight, ArrowDownRight, ChevronRight,
+  ArrowUpRight, ArrowDownRight, Info, ChevronRight,
   Search, RefreshCw, Award, Flame, X,
-  LineChart, Loader, AlertTriangle, Clock,
-  Settings, Sliders, Wifi, WifiOff, GitCompare,
-  Plus, Minus, Check, Star
+  LineChart, Loader, AlertTriangle, TrendingDown, Clock
 } from 'lucide-react';
 
 // Mock data generator for fallback
@@ -66,112 +64,21 @@ const generateMockData = (symbol) => {
   };
 };
 
-// Convert API data to our format
-const convertAPIData = (fmpData, polygonData, uwData, symbol) => {
-  // Process FMP data
-  const quote = fmpData && fmpData[0] ? fmpData[0] : null;
-  const price = quote ? quote.price : 100 + Math.random() * 200;
-  const change = quote ? quote.change : (Math.random() - 0.5) * 10;
-  const changePercent = quote ? quote.changesPercentage : ((change / price) * 100);
-  
-  // Process Polygon data
-  const polygonQuote = polygonData?.results?.[0];
-  const volume = polygonQuote ? polygonQuote.v : Math.floor(Math.random() * 100000000);
-  
-  // Process Unusual Whales data
-  const uwDataArray = uwData?.data || [];
-  const hasUWData = uwDataArray.length > 0;
-  
-  // Calculate implied volatility from UW data
-  let avgIV = 25; // default
-  if (hasUWData) {
-    const ivSum = uwDataArray.reduce((sum, item) => {
-      const iv = item.implied_volatility || item.iv || 0.25;
-      return sum + (typeof iv === 'string' ? parseFloat(iv) : iv);
-    }, 0);
-    avgIV = uwDataArray.length > 0 ? (ivSum / uwDataArray.length) * 100 : 25;
-  }
-  
-  // Calculate flow sentiment from UW data
-  let flowSentiment = 'neutral';
-  if (hasUWData) {
-    const bullishFlow = uwDataArray.filter(item => 
-      item.tags?.includes('bullish') || 
-      item.option_type === 'call' ||
-      (item.delta && parseFloat(item.delta) > 0)
-    ).length;
-    
-    const bearishFlow = uwDataArray.filter(item => 
-      item.tags?.includes('bearish') || 
-      item.option_type === 'put' ||
-      (item.delta && parseFloat(item.delta) < 0)
-    ).length;
-    
-    if (bullishFlow > bearishFlow * 1.5) flowSentiment = 'bullish';
-    else if (bearishFlow > bullishFlow * 1.5) flowSentiment = 'bearish';
-  }
-  
-  return {
-    stockData: {
-      symbol: symbol.toUpperCase(),
-      price: parseFloat(price.toFixed(2)),
-      change: parseFloat(change.toFixed(2)),
-      changePercent: parseFloat(changePercent.toFixed(2)),
-      volume: volume,
-      avgVolume: Math.floor(volume * 0.8),
-      marketCap: Math.floor(price * 1000000000),
-      pe: quote?.pe || parseFloat((10 + Math.random() * 30).toFixed(1)),
-      iv: parseFloat(avgIV.toFixed(1)),
-      ivRank: Math.floor(avgIV * 1.5), // Simple IV rank calculation
-      atmStrike: Math.round(price / 5) * 5,
-      putCallRatio: parseFloat((0.5 + Math.random()).toFixed(2)),
-      optionVolume: hasUWData ? uwDataArray.reduce((sum, item) => sum + (item.volume || 0), 0) : Math.floor(Math.random() * 50000),
-      openInterest: hasUWData ? uwDataArray.reduce((sum, item) => sum + (item.open_interest || 0), 0) : Math.floor(Math.random() * 100000)
-    },
-    marketConditions: {
-      trend: changePercent > 2 ? 'bullish' : changePercent < -2 ? 'bearish' : 'neutral',
-      movement: avgIV > 50 ? 'volatile' : avgIV < 25 ? 'stable' : 'neutral',
-      flowSentiment: flowSentiment,
-      unusualOptions: hasUWData ? uwDataArray.filter(item => item.tags?.includes('unusual')).length : Math.floor(Math.random() * 30),
-      has0DTE: hasUWData ? uwDataArray.some(item => {
-        const expiry = item.expiry;
-        if (!expiry) return false;
-        const today = new Date().toISOString().split('T')[0];
-        return expiry === today;
-      }) : false,
-      zeroDTEVolume: Math.floor(Math.random() * 50000),
-      zeroDTEFlow: Math.floor(Math.random() * 20)
-    },
-    zeroDTEData: {
-      available: hasUWData,
-      callCount: hasUWData ? uwDataArray.filter(item => item.option_type === 'call').length : Math.floor(Math.random() * 50),
-      putCount: hasUWData ? uwDataArray.filter(item => item.option_type === 'put').length : Math.floor(Math.random() * 50),
-      atmCallPremium: price * 0.003,
-      atmPutPremium: price * 0.003,
-      totalVolume: hasUWData ? uwDataArray.reduce((sum, item) => sum + (item.volume || 0), 0) : Math.floor(Math.random() * 50000),
-      totalOI: hasUWData ? uwDataArray.reduce((sum, item) => sum + (item.open_interest || 0), 0) : Math.floor(Math.random() * 10000)
-    },
-    greeksData: {
-      available: hasUWData && uwDataArray.some(item => item.delta || item.gamma || item.theta || item.vega),
-      atm: hasUWData && uwDataArray.length > 0 ? {
-        delta: parseFloat(uwDataArray[0]?.delta || '0.5'),
-        gamma: parseFloat(uwDataArray[0]?.gamma || '0.02'),
-        theta: parseFloat(uwDataArray[0]?.theta || '-0.05'),
-        vega: parseFloat(uwDataArray[0]?.vega || '0.15'),
-        rho: parseFloat(uwDataArray[0]?.rho || '0.03')
-      } : {
-        delta: 0.5 + (Math.random() - 0.5) * 0.2,
-        gamma: Math.random() * 0.05,
-        theta: -(Math.random() * 0.5),
-        vega: Math.random() * 0.3,
-        rho: Math.random() * 0.1
-      }
-    }
-  };
+// Helper to get next monthly expiry
+const getNextExpiry = () => {
+  const today = new Date();
+  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  // Find third Friday of next month
+  const firstDay = nextMonth.getDay();
+  const firstFriday = firstDay <= 5 ? 5 - firstDay : 12 - firstDay;
+  const thirdFriday = firstFriday + 14;
+  nextMonth.setDate(thirdFriday);
+  return nextMonth.toISOString().split('T')[0];
 };
 
-// Strategy definitions (keeping your existing ones)
+// Complete strategy definitions with calculations - INCLUDING 0DTE
 const strategies = {
+  // STANDARD STRATEGIES
   longCall: {
     name: 'Long Call',
     type: 'directional',
@@ -261,6 +168,192 @@ const strategies = {
       };
     }
   },
+  bearCallSpread: {
+    name: 'Bear Call Spread',
+    type: 'spread',
+    bias: 'bearish',
+    description: 'Sell call + buy higher strike call',
+    bestFor: 'Moderate bearish view with income',
+    maxProfit: 'Net credit received',
+    maxLoss: 'Strike difference - credit',
+    riskReward: 'Moderate',
+    greeks: { delta: '-', gamma: '0', theta: '+', vega: '-' },
+    calculate: (stockData) => {
+      const strikeWidth = 5;
+      const credit = strikeWidth * 0.35;
+      const maxLoss = strikeWidth - credit;
+      const breakeven = stockData.price + credit;
+      return {
+        maxProfit: `$${(credit * 100).toFixed(2)}`,
+        maxLoss: `$${(maxLoss * 100).toFixed(2)}`,
+        breakeven: `$${breakeven.toFixed(2)}`,
+        delta: '-0.15',
+        profitProb: '70%'
+      };
+    }
+  },
+  longStraddle: {
+    name: 'Long Straddle',
+    type: 'volatility',
+    bias: 'neutral',
+    description: 'Buy ATM call and put',
+    bestFor: 'Big move expected, direction unknown',
+    maxProfit: 'Unlimited',
+    maxLoss: 'Total premium paid',
+    riskReward: 'High',
+    greeks: { delta: '0', gamma: '+', theta: '-', vega: '+' },
+    calculate: (stockData) => {
+      const totalPremium = stockData.price * 0.04;
+      const lowerBreakeven = stockData.price - totalPremium;
+      const upperBreakeven = stockData.price + totalPremium;
+      return {
+        maxLoss: `$${(totalPremium * 100).toFixed(2)}`,
+        breakeven: `$${lowerBreakeven.toFixed(2)} & $${upperBreakeven.toFixed(2)}`,
+        delta: 'Neutral',
+        profitProb: '40%'
+      };
+    }
+  },
+  coveredCall: {
+    name: 'Covered Call',
+    type: 'income',
+    bias: 'neutral-bullish',
+    description: 'Own stock + sell call options',
+    bestFor: 'Generate income on existing position',
+    maxProfit: 'Premium + stock appreciation to strike',
+    maxLoss: 'Stock price - premium received',
+    riskReward: 'Low',
+    greeks: { delta: '+', gamma: '-', theta: '+', vega: '-' },
+    calculate: (stockData) => {
+      const callPremium = stockData.price * 0.015;
+      const maxProfit = callPremium + Math.max(0, (stockData.atmStrike || stockData.price) - stockData.price);
+      return {
+        maxLoss: `$${((stockData.price - callPremium) * 100).toFixed(2)}`,
+        breakeven: `$${(stockData.price - callPremium).toFixed(2)}`,
+        delta: '+0.50',
+        profitProb: '68%',
+        maxProfit: `$${(maxProfit * 100).toFixed(2)}`
+      };
+    }
+  },
+  // ADVANCED STRATEGIES
+  ironButterfly: {
+    name: 'Iron Butterfly',
+    type: 'neutral',
+    bias: 'neutral',
+    description: 'Sell ATM straddle + buy OTM protection',
+    bestFor: 'Tight range, high probability income',
+    maxProfit: 'Net credit received',
+    maxLoss: 'Strike width - credit',
+    riskReward: 'High Probability',
+    greeks: { delta: '0', gamma: '-', theta: '+', vega: '-' },
+    calculate: (stockData) => {
+      const strikeWidth = 10;
+      const credit = strikeWidth * 0.4;
+      const maxLoss = strikeWidth - credit;
+      const atmStrike = Math.round(stockData.price / 5) * 5;
+      return {
+        maxProfit: `$${(credit * 100).toFixed(2)}`,
+        maxLoss: `$${(maxLoss * 100).toFixed(2)}`,
+        breakeven: `$${(atmStrike - credit).toFixed(2)} - $${(atmStrike + credit).toFixed(2)}`,
+        delta: 'Neutral',
+        profitProb: '75%'
+      };
+    }
+  },
+  jadeLizard: {
+    name: 'Jade Lizard',
+    type: 'premium',
+    bias: 'neutral-bullish',
+    description: 'Sell put + sell call spread (no upside risk!)',
+    bestFor: 'Bullish with high IV, collect premium',
+    maxProfit: 'Net credit received',
+    maxLoss: 'Put strike - credit (only downside)',
+    riskReward: 'No upside risk!',
+    greeks: { delta: '+', gamma: '-', theta: '+', vega: '-' },
+    calculate: (stockData) => {
+      const putStrike = Math.round(stockData.price * 0.95 / 5) * 5;
+      const credit = stockData.price * 0.025;
+      const maxLoss = putStrike - credit;
+      return {
+        maxProfit: `$${(credit * 100).toFixed(2)}`,
+        maxLoss: `$${(maxLoss * 100).toFixed(2)} (downside only)`,
+        breakeven: `$${(putStrike - credit).toFixed(2)}`,
+        delta: '+0.10',
+        profitProb: '70%',
+        special: '🦎 NO UPSIDE RISK!'
+      };
+    }
+  },
+  calendarSpread: {
+    name: 'Calendar Spread',
+    type: 'volatility',
+    bias: 'neutral',
+    description: 'Sell near-term, buy far-term same strike',
+    bestFor: 'IV expansion or time decay play',
+    maxProfit: 'Varies at expiration',
+    maxLoss: 'Net debit paid',
+    riskReward: 'Moderate',
+    greeks: { delta: '0', gamma: '-', theta: '+', vega: '+' },
+    calculate: (stockData) => {
+      const debit = stockData.price * 0.015;
+      const atmStrike = Math.round(stockData.price / 5) * 5;
+      return {
+        maxLoss: `$${(debit * 100).toFixed(2)}`,
+        breakeven: 'Varies with IV',
+        profitZone: `Around $${atmStrike}`,
+        delta: 'Neutral',
+        profitProb: '60%',
+        special: '📅 Profits from time decay'
+      };
+    }
+  },
+  brokenWingButterfly: {
+    name: 'Broken Wing Butterfly',
+    type: 'directional',
+    bias: 'bullish',
+    description: 'Butterfly with wider protection side',
+    bestFor: 'Directional play with cheap protection',
+    maxProfit: 'Strike width - debit',
+    maxLoss: 'Net debit (or credit if done for credit)',
+    riskReward: 'Asymmetric',
+    greeks: { delta: '+', gamma: '0', theta: '+', vega: '-' },
+    calculate: (stockData) => {
+      const atmStrike = Math.round(stockData.price / 5) * 5;
+      const debit = stockData.price * 0.005;
+      return {
+        maxProfit: `$${(500 - debit * 100).toFixed(2)}`,
+        maxLoss: debit > 0 ? `$${(debit * 100).toFixed(2)}` : 'None (credit received)',
+        breakeven: `$${(atmStrike + debit).toFixed(2)}`,
+        delta: '+0.15',
+        profitProb: '55%',
+        special: '🦋 Asymmetric risk/reward'
+      };
+    }
+  },
+  doubleDiagonal: {
+    name: 'Double Diagonal',
+    type: 'income',
+    bias: 'neutral',
+    description: 'Calendar spreads on both puts and calls',
+    bestFor: 'Range-bound with volatility expansion',
+    maxProfit: 'Varies with IV',
+    maxLoss: 'Net debit paid',
+    riskReward: 'Moderate',
+    greeks: { delta: '0', gamma: '-', theta: '+', vega: '+' },
+    calculate: (stockData) => {
+      const debit = stockData.price * 0.03;
+      const range = stockData.price * 0.05;
+      return {
+        maxLoss: `$${(debit * 100).toFixed(2)}`,
+        profitZone: `$${(stockData.price - range).toFixed(2)} - $${(stockData.price + range).toFixed(2)}`,
+        delta: 'Neutral',
+        profitProb: '65%',
+        special: '💎 Premium income machine'
+      };
+    }
+  },
+  // 0DTE STRATEGIES - Day Trading Power!
   zeroDTELongCall: {
     name: '0DTE Long Call',
     type: '0dte',
@@ -278,6 +371,28 @@ const strategies = {
         maxLoss: `$${(callPremium * 100).toFixed(2)}`,
         breakeven: `$${breakeven.toFixed(2)}`,
         delta: '+0.40-0.60',
+        profitProb: '25%',
+        special: '⚡ EXPIRES TODAY!'
+      };
+    }
+  },
+  zeroDTELongPut: {
+    name: '0DTE Long Put',
+    type: '0dte',
+    bias: 'bearish',
+    description: 'Intraday bearish play - puts expiring today',
+    bestFor: 'Sharp intraday selloff expected',
+    maxProfit: 'Strike - premium (until close)',
+    maxLoss: 'Premium paid',
+    riskReward: 'Very High Risk',
+    greeks: { delta: '--', gamma: '+++', theta: '---', vega: '0' },
+    calculate: (stockData) => {
+      const putPremium = stockData.price * 0.003;
+      const breakeven = stockData.price - putPremium;
+      return {
+        maxLoss: `$${(putPremium * 100).toFixed(2)}`,
+        breakeven: `$${breakeven.toFixed(2)}`,
+        delta: '-0.40-0.60',
         profitProb: '25%',
         special: '⚡ EXPIRES TODAY!'
       };
@@ -305,90 +420,193 @@ const strategies = {
         special: '🔥 MAX THETA DECAY!'
       };
     }
+  },
+  zeroDTECallSpread: {
+    name: '0DTE Call Spread',
+    type: '0dte',
+    bias: 'bullish',
+    description: 'Defined risk bullish play expiring today',
+    bestFor: 'Bullish but want to limit risk',
+    maxProfit: 'Strike width - debit',
+    maxLoss: 'Debit paid',
+    riskReward: 'Defined Risk',
+    greeks: { delta: '+', gamma: '0', theta: '--', vega: '0' },
+    calculate: (stockData) => {
+      const strikeWidth = 2.5;
+      const debit = strikeWidth * 0.4;
+      const maxProfit = strikeWidth - debit;
+      return {
+        maxProfit: `$${(maxProfit * 100).toFixed(2)}`,
+        maxLoss: `$${(debit * 100).toFixed(2)}`,
+        breakeven: `$${(stockData.price + debit).toFixed(2)}`,
+        profitProb: '35%',
+        special: '⏰ DAY TRADE ONLY!'
+      };
+    }
+  },
+  zeroDTEPutSpread: {
+    name: '0DTE Put Spread',
+    type: '0dte',
+    bias: 'bearish',
+    description: 'Defined risk bearish play expiring today',
+    bestFor: 'Bearish but want to limit risk',
+    maxProfit: 'Strike width - debit',
+    maxLoss: 'Debit paid',
+    riskReward: 'Defined Risk',
+    greeks: { delta: '-', gamma: '0', theta: '--', vega: '0' },
+    calculate: (stockData) => {
+      const strikeWidth = 2.5;
+      const debit = strikeWidth * 0.4;
+      const maxProfit = strikeWidth - debit;
+      return {
+        maxProfit: `$${(maxProfit * 100).toFixed(2)}`,
+        maxLoss: `$${(debit * 100).toFixed(2)}`,
+        breakeven: `$${(stockData.price - debit).toFixed(2)}`,
+        profitProb: '35%',
+        special: '⏰ DAY TRADE ONLY!'
+      };
+    }
   }
 };
 
-// Enhanced recommendation generator
+// Enhanced recommendation generator with 0DTE
 const generateRecommendations = (stockData, marketConditions, zeroDTEData) => {
   const recommendations = [];
   const ivRank = stockData?.ivRank || 50;
   const trend = marketConditions?.trend || 'neutral';
   const flowSentiment = marketConditions?.flowSentiment || 'neutral';
+  const unusualOptions = marketConditions?.unusualOptions || 0;
   const movement = marketConditions?.movement || 'neutral';
-  const changePercent = stockData?.changePercent || 0;
   
-  console.log('=== LIVE DATA RECOMMENDATION ENGINE ===');
-  console.log('Stock:', stockData?.symbol);
-  console.log('Price Change:', changePercent + '%');
+  console.log('=== STRATEGY SELECTION DEBUG ===');
   console.log('IV Rank:', ivRank);
   console.log('Trend:', trend);
-  console.log('Flow Sentiment:', flowSentiment);
   console.log('Movement:', movement);
-  console.log('0DTE Available:', marketConditions?.has0DTE || zeroDTEData?.available);
-  console.log('======================================');
+  console.log('0DTE Available:', marketConditions?.has0DTE);
+  console.log('0DTE Volume:', marketConditions?.zeroDTEVolume);
+  console.log('================================');
   
-  // PRIORITY 1: 0DTE STRATEGIES (if available)
+  // 0DTE STRATEGIES - Highest Priority when available
   if (marketConditions?.has0DTE || zeroDTEData?.available) {
-    if (Math.abs(changePercent) > 0.5) {
-      if (changePercent > 0.5) {
+    console.log('0DTE Options Available! Volume:', marketConditions?.zeroDTEVolume);
+    
+    // High volume 0DTE = momentum play
+    if ((marketConditions?.zeroDTEVolume > 5000) || (zeroDTEData?.totalVolume > 5000)) {
+      if (trend === 'bullish' || trend === 'strongly bullish') {
         recommendations.push({
           ...strategies.zeroDTELongCall,
           winRate: 35,
           priority: 1,
-          reason: `⚡ 0DTE MOMENTUM! Stock up ${changePercent.toFixed(2)}% - Ride the intraday trend!`
+          reason: `⚡ 0DTE MOMENTUM! High volume (${marketConditions?.zeroDTEVolume || zeroDTEData?.totalVolume}) + Bullish = Quick gains possible`
+        });
+        
+        recommendations.push({
+          ...strategies.zeroDTECallSpread,
+          winRate: 40,
+          priority: 2,
+          reason: '0DTE Call Spread - Defined risk for day trade'
+        });
+      } else if (trend === 'bearish' || trend === 'strongly bearish') {
+        recommendations.push({
+          ...strategies.zeroDTELongPut,
+          winRate: 35,
+          priority: 1,
+          reason: `⚡ 0DTE BEARISH! High volume + Bearish trend = Quick profits on downside`
+        });
+        
+        recommendations.push({
+          ...strategies.zeroDTEPutSpread,
+          winRate: 40,
+          priority: 2,
+          reason: '0DTE Put Spread - Defined risk bearish day trade'
         });
       }
-    } else {
+    }
+    
+    // Stable price action = Iron Fly
+    if (movement === 'stable' || Math.abs(stockData.changePercent || 0) < 0.5) {
       recommendations.push({
         ...strategies.zeroDTEIronFly,
         winRate: 68,
         priority: 1,
-        reason: `🎯 0DTE PIN PLAY! Stock stable (${changePercent.toFixed(2)}%) - Maximum theta decay!`
+        reason: `🎯 0DTE PIN PLAY! Stock stable near $${stockData.price} - Collect maximum theta`
       });
     }
   }
   
-  // PRIORITY 2: DIRECTIONAL PLAYS
-  if (Math.abs(changePercent) > 2) {
-    if (changePercent > 2) {
-      if (ivRank < 40) {
-        recommendations.push({
-          ...strategies.longCall,
-          winRate: 45,
-          priority: 2,
-          reason: `📈 STRONG BULLISH! Up ${changePercent.toFixed(2)}% with low IV (${ivRank}) - Cheap calls!`
-        });
-      } else {
-        recommendations.push({
-          ...strategies.bullPutSpread,
-          winRate: 70,
-          priority: 2,
-          reason: `📈 BULLISH MOMENTUM! Up ${changePercent.toFixed(2)}% - Collect premium on pullbacks`
-        });
-      }
+  // JADE LIZARD - High IV + Bullish
+  if (ivRank > 50 && (trend === 'bullish' || flowSentiment === 'bullish')) {
+    recommendations.push({
+      ...strategies.jadeLizard,
+      winRate: 70 + Math.floor(Math.random() * 10),
+      priority: recommendations.length + 1,
+      reason: `🦎 JADE LIZARD SETUP! High IV (${ivRank}) + Bullish bias = No upside risk strategy!`
+    });
+  }
+  
+  // HIGH IV STRATEGIES (>70)
+  if (ivRank > 70) {
+    recommendations.push({ 
+      ...strategies.ironCondor, 
+      winRate: 75 + Math.floor(Math.random() * 10),
+      priority: recommendations.length + 1,
+      reason: `Very high IV Rank (${ivRank}) - Perfect for premium selling`
+    });
+    
+    if (movement === 'stable') {
+      recommendations.push({
+        ...strategies.ironButterfly,
+        winRate: 75 + Math.floor(Math.random() * 10),
+        priority: recommendations.length + 1,
+        reason: `Stable movement + High IV = Perfect Iron Butterfly setup`
+      });
+    }
+  }
+  // LOW IV STRATEGIES (<30)
+  else if (ivRank < 30) {
+    recommendations.push({
+      ...strategies.calendarSpread,
+      winRate: 60 + Math.floor(Math.random() * 10),
+      priority: recommendations.length + 1,
+      reason: `Low IV (${ivRank}) = Potential IV expansion with Calendar Spread`
+    });
+    
+    if (trend === 'bullish') {
+      recommendations.push({ 
+        ...strategies.longCall, 
+        winRate: 65 + Math.floor(Math.random() * 10),
+        priority: recommendations.length + 1,
+        reason: `Low IV (${ivRank}) makes calls cheap - bullish trend`
+      });
+    }
+  }
+  // MEDIUM IV STRATEGIES
+  else {
+    if (trend === 'bullish' || flowSentiment === 'bullish') {
+      recommendations.push({ 
+        ...strategies.bullPutSpread, 
+        winRate: 68 + Math.floor(Math.random() * 10),
+        priority: recommendations.length + 1,
+        reason: `Bullish sentiment with moderate IV (${ivRank})`
+      });
+    } else if (trend === 'bearish' || flowSentiment === 'bearish') {
+      recommendations.push({ 
+        ...strategies.bearCallSpread, 
+        winRate: 68 + Math.floor(Math.random() * 10),
+        priority: recommendations.length + 1,
+        reason: `Bearish sentiment with moderate IV (${ivRank})`
+      });
+    } else {
+      recommendations.push({ 
+        ...strategies.ironCondor, 
+        winRate: 70 + Math.floor(Math.random() * 10),
+        priority: recommendations.length + 1,
+        reason: `Neutral market with moderate IV (${ivRank})`
+      });
     }
   }
   
-  // PRIORITY 3: IV-BASED STRATEGIES
-  if (ivRank > 70) {
-    recommendations.push({
-      ...strategies.ironCondor,
-      winRate: 75,
-      priority: 3,
-      reason: `🔥 EXTREME IV RANK (${ivRank})! Premium selling opportunity`
-    });
-  }
-  
-  // PRIORITY 4: DEFAULT
-  if (recommendations.length === 0) {
-    recommendations.push({
-      ...strategies.ironCondor,
-      winRate: 65,
-      priority: 5,
-      reason: `No strong directional bias - Neutral iron condor`
-    });
-  }
-  
+  // Ensure uniqueness and sort
   const uniqueRecommendations = Array.from(
     new Map(recommendations.map(item => [item.name, item])).values()
   );
@@ -401,7 +619,6 @@ const generateRecommendations = (stockData, marketConditions, zeroDTEData) => {
   return uniqueRecommendations.slice(0, 5);
 };
 
-// Main Component
 export default function AIOptionsStrategy() {
   const [selectedStock, setSelectedStock] = useState('AAPL');
   const [searchInput, setSearchInput] = useState('AAPL');
@@ -410,12 +627,6 @@ export default function AIOptionsStrategy() {
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [accountBalance, setAccountBalance] = useState(25000);
   const [maxRisk, setMaxRisk] = useState(2);
-  const [showSettings, setShowSettings] = useState(false);
-  const [compareMode, setCompareMode] = useState(false);
-  const [comparedSymbols, setComparedSymbols] = useState([]);
-  const [comparisonData, setComparisonData] = useState({});
-  const [dataSource, setDataSource] = useState('checking');
-  const [connectionStatus, setConnectionStatus] = useState('checking');
   
   const [stockData, setStockData] = useState(null);
   const [marketConditions, setMarketConditions] = useState(null);
@@ -424,177 +635,9 @@ export default function AIOptionsStrategy() {
   const [zeroDTEData, setZeroDTEData] = useState(null);
   
   const favorites = ['AAPL', 'NVDA', 'TSLA', 'SPY', 'AMZN', 'QQQ'];
-
-  // Check API connection on mount
-  useEffect(() => {
-    checkAPIConnection();
-  }, []);
-
-  const checkAPIConnection = async () => {
-    setConnectionStatus('checking');
-    try {
-      // Test all three APIs
-      const testSymbol = 'AAPL';
-      const [fmpTest, polygonTest, uwTest] = await Promise.allSettled([
-        fetch(`/api/fmp-api?symbol=${testSymbol}`),
-        fetch(`/api/polygon-api?symbol=${testSymbol}`),
-        fetch(`/api/unusual-whales-api?symbol=${testSymbol}`)
-      ]);
-      
-      const workingAPIs = [fmpTest, polygonTest, uwTest].filter(
-        result => result.status === 'fulfilled' && result.value.ok
-      ).length;
-      
-      if (workingAPIs >= 2) {
-        setConnectionStatus('connected');
-        setDataSource('live');
-      } else if (workingAPIs >= 1) {
-        setConnectionStatus('partial');
-        setDataSource('mixed');
-      } else {
-        setConnectionStatus('disconnected');
-        setDataSource('mock');
-      }
-    } catch (error) {
-      setConnectionStatus('disconnected');
-      setDataSource('mock');
-    }
-  };
-
-  // Fetch live data from your APIs
-  const fetchLiveData = async (symbol) => {
-    try {
-      // Call all three APIs in parallel
-      const [fmpResponse, polygonResponse, uwResponse] = await Promise.allSettled([
-        fetch(`/api/fmp-api?symbol=${symbol}`),
-        fetch(`/api/polygon-api?symbol=${symbol}`),
-        fetch(`/api/unusual-whales-api?symbol=${symbol}`)
-      ]);
-      
-      // Process responses
-      const fmpData = fmpResponse.status === 'fulfilled' && fmpResponse.value.ok 
-        ? await fmpResponse.value.json() 
-        : null;
-      
-      const polygonData = polygonResponse.status === 'fulfilled' && polygonResponse.value.ok 
-        ? await polygonResponse.value.json() 
-        : null;
-      
-      const uwData = uwResponse.status === 'fulfilled' && uwResponse.value.ok 
-        ? await uwResponse.value.json() 
-        : null;
-      
-      // Convert API data to our format
-      return convertAPIData(fmpData, polygonData, uwData, symbol);
-      
-    } catch (error) {
-      console.error('Live data fetch error:', error);
-      throw error;
-    }
-  };
-
-  // Main fetch function
-  const fetchData = useCallback(async (symbol) => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      let data;
-      let isLiveData = false;
-      
-      if (dataSource === 'live' || dataSource === 'mixed') {
-        try {
-          data = await fetchLiveData(symbol);
-          isLiveData = true;
-          console.log('🚀 Using LIVE DATA for', symbol);
-        } catch (liveError) {
-          console.log('📊 Live data failed, using mock for', symbol);
-          data = generateMockData(symbol);
-        }
-      } else {
-        console.log('📊 Using MOCK data for', symbol);
-        data = generateMockData(symbol);
-      }
-      
-      // Update data source indicator
-      setDataSource(isLiveData ? 'live' : 'mock');
-      
-      // Set all the state
-      setStockData(data.stockData);
-      setMarketConditions(data.marketConditions);
-      setGreeksData(data.greeksData);
-      setZeroDTEData(data.zeroDTEData);
-      
-      // Store for comparison if in compare mode
-      if (compareMode) {
-        setComparisonData(prev => ({
-          ...prev,
-          [symbol]: data
-        }));
-      }
-      
-      // Generate recommendations
-      const recs = generateRecommendations(data.stockData, data.marketConditions, data.zeroDTEData);
-      setRecommendations(recs);
-      
-    } catch (err) {
-      console.error('Fetch error:', err);
-      setError('Failed to load data - using demo data');
-      
-      const data = generateMockData(symbol);
-      setStockData(data.stockData);
-      setMarketConditions(data.marketConditions);
-      setGreeksData(data.greeksData);
-      setZeroDTEData(data.zeroDTEData);
-      setRecommendations(generateRecommendations(data.stockData, data.marketConditions, data.zeroDTEData));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [dataSource, compareMode]);
-
-  // Load initial data
-  useEffect(() => {
-    fetchData(selectedStock);
-  }, [selectedStock, fetchData]);
-
-  const handleAnalyze = () => {
-    const symbol = searchInput.toUpperCase();
-    setSelectedStock(symbol);
-    
-    if (compareMode) {
-      addToComparison(symbol);
-    }
-  };
-
-  // Comparison functions
-  const addToComparison = (symbol) => {
-    if (comparedSymbols.length < 4 && !comparedSymbols.includes(symbol)) {
-      setComparedSymbols(prev => [...prev, symbol]);
-      fetchData(symbol);
-    }
-  };
-
-  const removeFromComparison = (symbol) => {
-    setComparedSymbols(prev => prev.filter(s => s !== symbol));
-    setComparisonData(prev => {
-      const newData = { ...prev };
-      delete newData[symbol];
-      return newData;
-    });
-  };
-
-  const toggleCompareMode = () => {
-    setCompareMode(!compareMode);
-    if (!compareMode) {
-      setComparedSymbols([]);
-      setComparisonData({});
-    }
-  };
-
+  
   // Calculate position sizing
   const calculatePositionSize = (strategy) => {
-    if (!stockData) return { contracts: 1, totalCost: 100 };
-    
     const details = strategy.calculate ? strategy.calculate(stockData) : {};
     const maxLossStr = details.maxLoss || '100';
     const maxLoss = parseFloat(maxLossStr.match(/[\d.]+/)) || 100;
@@ -609,46 +652,206 @@ export default function AIOptionsStrategy() {
     
     return { contracts, totalCost };
   };
-
-  // Connection status indicator
-  const ConnectionStatus = () => {
-    const statusConfig = {
-      connected: {
-        icon: <Wifi className="w-4 h-4" />,
-        text: 'Live Data',
-        color: 'text-green-400',
-        bgColor: 'bg-green-400/10'
-      },
-      partial: {
-        icon: <Wifi className="w-4 h-4" />,
-        text: 'Partial Live',
-        color: 'text-yellow-400',
-        bgColor: 'bg-yellow-400/10'
-      },
-      disconnected: {
-        icon: <WifiOff className="w-4 h-4" />,
-        text: 'Mock Data',
-        color: 'text-red-400',
-        bgColor: 'bg-red-400/10'
-      },
-      checking: {
-        icon: <Loader className="w-4 h-4 animate-spin" />,
-        text: 'Connecting...',
-        color: 'text-gray-400',
-        bgColor: 'bg-gray-400/10'
-      }
-    };
-
-    const config = statusConfig[connectionStatus];
-
-    return (
-      <div className={`flex items-center gap-2 px-3 py-1 rounded-lg ${config.bgColor}`}>
-        <span className={config.color}>{config.icon}</span>
-        <span className={`text-sm ${config.color}`}>{config.text}</span>
-      </div>
-    );
+  
+  // Calculate specific strikes for strategies - UPDATED WITH 0DTE
+  const calculateStrikes = (strategy) => {
+    if (!stockData) return null;
+    
+    const price = stockData.price;
+    const atmStrike = Math.round(price / 5) * 5;
+    
+    switch(strategy.name) {
+      case 'Long Call':
+      case '0DTE Long Call':
+        return {
+          primary: atmStrike,
+          expiry: strategy.name.includes('0DTE') ? 'TODAY!' : '30-45 DTE',
+          action: `Buy ${atmStrike} Call`,
+          special: strategy.name.includes('0DTE') ? '⚡ EXPIRES TODAY!' : null
+        };
+        
+      case 'Long Put':
+      case '0DTE Long Put':
+        return {
+          primary: atmStrike,
+          expiry: strategy.name.includes('0DTE') ? 'TODAY!' : '30-45 DTE',
+          action: `Buy ${atmStrike} Put`,
+          special: strategy.name.includes('0DTE') ? '⚡ EXPIRES TODAY!' : null
+        };
+        
+      case '0DTE Call Spread':
+        return {
+          primary: atmStrike,
+          secondary: atmStrike + 2.5,
+          expiry: 'TODAY!',
+          action: `Buy ${atmStrike} Call / Sell ${atmStrike + 2.5} Call`,
+          special: '⏰ DAY TRADE ONLY!'
+        };
+        
+      case '0DTE Put Spread':
+        return {
+          primary: atmStrike,
+          secondary: atmStrike - 2.5,
+          expiry: 'TODAY!',
+          action: `Buy ${atmStrike} Put / Sell ${atmStrike - 2.5} Put`,
+          special: '⏰ DAY TRADE ONLY!'
+        };
+        
+      case '0DTE Iron Fly':
+        return {
+          primary: atmStrike,
+          wingSpread: `${atmStrike - 5}/${atmStrike + 5}`,
+          expiry: 'TODAY!',
+          action: `Sell ${atmStrike} Call & Put / Buy ${atmStrike - 5} Put / Buy ${atmStrike + 5} Call`,
+          special: '🔥 MAXIMUM THETA!'
+        };
+        
+      case 'Bull Put Spread':
+        return {
+          primary: atmStrike - 5,
+          secondary: atmStrike - 10,
+          expiry: '30-45 DTE',
+          action: `Sell ${atmStrike - 5} Put / Buy ${atmStrike - 10} Put`
+        };
+        
+      case 'Bear Call Spread':
+        return {
+          primary: atmStrike + 5,
+          secondary: atmStrike + 10,
+          expiry: '30-45 DTE',
+          action: `Sell ${atmStrike + 5} Call / Buy ${atmStrike + 10} Call`
+        };
+        
+      case 'Iron Condor':
+        return {
+          putSpread: `${atmStrike - 10}/${atmStrike - 5}`,
+          callSpread: `${atmStrike + 5}/${atmStrike + 10}`,
+          expiry: '30-45 DTE',
+          action: `Sell ${atmStrike - 5} Put / Buy ${atmStrike - 10} Put / Sell ${atmStrike + 5} Call / Buy ${atmStrike + 10} Call`
+        };
+        
+      case 'Long Straddle':
+        return {
+          primary: atmStrike,
+          expiry: '30-60 DTE',
+          action: `Buy ${atmStrike} Call + Buy ${atmStrike} Put`
+        };
+        
+      case 'Covered Call':
+        return {
+          primary: atmStrike + 5,
+          expiry: '30-45 DTE',
+          action: `Own 100 shares + Sell ${atmStrike + 5} Call`
+        };
+        
+      case 'Iron Butterfly':
+        return {
+          primary: atmStrike,
+          wingSpread: `${atmStrike - 10}/${atmStrike + 10}`,
+          expiry: '30-45 DTE',
+          action: `Sell ${atmStrike} Call & Put / Buy ${atmStrike - 10} Put / Buy ${atmStrike + 10} Call`
+        };
+        
+      case 'Jade Lizard':
+        const jlPutStrike = atmStrike - 5;
+        const jlCallStrike1 = atmStrike + 5;
+        const jlCallStrike2 = atmStrike + 10;
+        return {
+          putStrike: jlPutStrike,
+          callSpread: `${jlCallStrike1}/${jlCallStrike2}`,
+          expiry: '30-45 DTE',
+          action: `Sell ${jlPutStrike} Put / Sell ${jlCallStrike1} Call / Buy ${jlCallStrike2} Call`,
+          special: '🦎 NO UPSIDE RISK!'
+        };
+        
+      case 'Calendar Spread':
+        return {
+          primary: atmStrike,
+          expiry: 'Sell 30 DTE / Buy 60 DTE',
+          action: `Sell ${atmStrike} Call (30 DTE) / Buy ${atmStrike} Call (60 DTE)`
+        };
+        
+      default:
+        return {
+          primary: atmStrike,
+          expiry: '30-45 DTE',
+          action: 'Custom strategy'
+        };
+    }
   };
-
+  
+  // Fetch data for a symbol
+  const fetchData = useCallback(async (symbol) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      console.log('Fetching data for:', symbol);
+      
+      // Call our API route with Greeks request
+      const response = await fetch('/api/market', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({ 
+          symbol,
+          includeGreeks: true,
+          expiry: getNextExpiry()
+        })
+      });
+      
+      console.log('API Response status:', response.status);
+      
+      const result = await response.json();
+      console.log('API Result:', result);
+      
+      if (result.success && !result.useMock) {
+        // Use real data from API
+        console.log('Using LIVE data for', symbol);
+        setStockData(result.stockData);
+        setMarketConditions(result.marketConditions);
+        setGreeksData(result.greeksData);
+        setZeroDTEData(result.zeroDTEData);
+        const recs = generateRecommendations(result.stockData, result.marketConditions, result.zeroDTEData);
+        console.log('Generated recommendations:', recs.length);
+        setRecommendations(recs);
+      } else {
+        // Fall back to mock data
+        console.log('Using MOCK data for', symbol);
+        const data = generateMockData(symbol);
+        setStockData(data.stockData);
+        setMarketConditions(data.marketConditions);
+        setGreeksData(data.greeksData);
+        setZeroDTEData(data.zeroDTEData);
+        setRecommendations(generateRecommendations(data.stockData, data.marketConditions, data.zeroDTEData));
+      }
+      
+    } catch (err) {
+      console.error('Fetch error:', err);
+      setError('Failed to load data');
+      // Use mock data as fallback
+      const data = generateMockData(symbol);
+      setStockData(data.stockData);
+      setMarketConditions(data.marketConditions);
+      setGreeksData(data.greeksData);
+      setZeroDTEData(data.zeroDTEData);
+      setRecommendations(generateRecommendations(data.stockData, data.marketConditions, data.zeroDTEData));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+  
+  // Load initial data
+  useEffect(() => {
+    fetchData(selectedStock);
+  }, [selectedStock, fetchData]);
+  
+  const handleAnalyze = () => {
+    const symbol = searchInput.toUpperCase();
+    setSelectedStock(symbol);
+  };
+  
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       {/* Header */}
@@ -659,129 +862,20 @@ export default function AIOptionsStrategy() {
             <div>
               <h1 className="text-2xl font-bold">AI Options Strategy Generator</h1>
               <p className="text-sm text-gray-400">
-                {dataSource === 'live' ? '🚀 Live Market Data Active' : 'Smart options strategies powered by AI'}
+                {stockData && !error ? 'Live Market Data + 0DTE + Greeks' : 'Smart options strategies powered by AI'}
               </p>
             </div>
           </div>
-          
-          <div className="flex items-center gap-3">
-            <ConnectionStatus />
-            <button 
-              onClick={toggleCompareMode}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                compareMode 
-                  ? 'bg-purple-600 hover:bg-purple-700' 
-                  : 'bg-gray-700 hover:bg-gray-600'
-              }`}
-            >
-              <GitCompare className="w-4 h-4" />
-              Compare ({comparedSymbols.length})
-            </button>
-            <button 
-              onClick={() => setShowSettings(!showSettings)}
-              className={`p-2 ${showSettings ? 'bg-purple-600' : 'bg-gray-800'} rounded-lg`}
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => fetchData(selectedStock)}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          </div>
+          <button 
+            onClick={() => fetchData(selectedStock)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
       </header>
-
-      {/* Settings Panel */}
-      {showSettings && (
-        <div className="bg-gray-800 border-b border-gray-700 px-6 py-4">
-          <h3 className="text-lg font-bold mb-4">Settings</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <label className="text-sm text-gray-400 block mb-1">Account Balance</label>
-              <input
-                type="number"
-                value={accountBalance}
-                onChange={(e) => setAccountBalance(Number(e.target.value))}
-                className="w-full px-2 py-1 bg-gray-700 rounded text-white"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-400 block mb-1">Max Risk %</label>
-              <input
-                type="number"
-                value={maxRisk}
-                onChange={(e) => setMaxRisk(Number(e.target.value))}
-                className="w-full px-2 py-1 bg-gray-700 rounded text-white"
-                min="1" max="10"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-400 block mb-1">Reconnect APIs</label>
-              <button
-                onClick={checkAPIConnection}
-                className="w-full px-2 py-1 bg-blue-600 rounded text-white hover:bg-blue-700"
-              >
-                Test Connection
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Comparison Mode Header */}
-      {compareMode && (
-        <div className="bg-purple-900/20 border-b border-purple-800 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-purple-400">📊 Comparison Mode Active</h3>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-400">Selected: {comparedSymbols.length}/4</span>
-              <button
-                onClick={() => {
-                  setComparedSymbols([]);
-                  setComparisonData({});
-                }}
-                className="px-3 py-1 bg-red-600 rounded text-sm hover:bg-red-700"
-              >
-                Clear All
-              </button>
-            </div>
-          </div>
-          {comparedSymbols.length > 0 && (
-            <div className="flex items-center gap-2 mt-3">
-              {comparedSymbols.map(symbol => (
-                <div key={symbol} className="flex items-center gap-2 bg-purple-800/30 px-3 py-1 rounded">
-                  <span className="font-medium">{symbol}</span>
-                  <button
-                    onClick={() => removeFromComparison(symbol)}
-                    className="text-red-400 hover:text-red-300"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Data Source Indicator */}
-      {dataSource === 'live' && (
-        <div className="mx-6 mt-4 bg-green-900/20 border border-green-800 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <Wifi className="w-5 h-5 text-green-400" />
-            <div>
-              <p className="text-sm text-green-400 font-medium">🚀 Live Market Data Active</p>
-              <p className="text-xs text-gray-400">
-                Connected to: FMP, Polygon{greeksData?.available && ', Unusual Whales with Greeks'}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
+      
       {/* Error Alert */}
       {error && (
         <div className="mx-6 mt-4 bg-yellow-900/20 border border-yellow-800 rounded-lg p-4">
@@ -797,13 +891,8 @@ export default function AIOptionsStrategy() {
         {/* Stock Search */}
         <div className="bg-gray-900 rounded-lg border border-gray-800 p-6 mb-6">
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <Search className="w-5 h-5 text-blue-500" />
+            <BarChart3 className="w-5 h-5 text-blue-500" />
             Analyze Stock Options
-            {compareMode && (
-              <span className="text-sm bg-purple-600/20 text-purple-400 px-2 py-1 rounded ml-2">
-                Compare Mode
-              </span>
-            )}
           </h2>
           
           <div className="flex gap-4 items-end mb-4">
@@ -828,12 +917,10 @@ export default function AIOptionsStrategy() {
             >
               {isLoading ? (
                 <Loader className="w-5 h-5 animate-spin" />
-              ) : compareMode ? (
-                <Plus className="w-5 h-5" />
               ) : (
                 <Sparkles className="w-5 h-5" />
               )}
-              {compareMode ? 'Add to Compare' : 'Analyze Options'}
+              Analyze Options
             </button>
           </div>
           
@@ -846,99 +933,18 @@ export default function AIOptionsStrategy() {
                 onClick={() => {
                   setSearchInput(symbol);
                   setSelectedStock(symbol);
-                  if (compareMode) addToComparison(symbol);
                 }}
-                className={`px-3 py-1 rounded text-sm transition-colors relative ${
+                className={`px-3 py-1 rounded text-sm transition-colors ${
                   selectedStock === symbol 
                     ? 'bg-purple-600 text-white' 
                     : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                 }`}
               >
                 {symbol}
-                {compareMode && comparedSymbols.includes(symbol) && (
-                  <Check className="w-3 h-3 absolute -top-1 -right-1 text-green-400" />
-                )}
               </button>
             ))}
           </div>
         </div>
-        
-        {/* Comparison View */}
-        {compareMode && comparedSymbols.length > 1 && (
-          <div className="bg-gray-900 rounded-lg border border-gray-800 p-6 mb-6">
-            <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <GitCompare className="w-5 h-5 text-purple-500" />
-              Symbol Comparison
-            </h2>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-800">
-                    <th className="text-left py-3 px-4">Metric</th>
-                    {comparedSymbols.map(symbol => (
-                      <th key={symbol} className="text-left py-3 px-4 font-bold">{symbol}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-gray-800">
-                    <td className="py-3 px-4 text-gray-400">Price</td>
-                    {comparedSymbols.map(symbol => {
-                      const data = comparisonData[symbol]?.stockData;
-                      return (
-                        <td key={symbol} className="py-3 px-4 font-medium">
-                          ${data?.price?.toFixed(2) || '--'}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                  <tr className="border-b border-gray-800">
-                    <td className="py-3 px-4 text-gray-400">Change %</td>
-                    {comparedSymbols.map(symbol => {
-                      const data = comparisonData[symbol]?.stockData;
-                      const change = data?.changePercent || 0;
-                      return (
-                        <td key={symbol} className={`py-3 px-4 font-medium ${
-                          change >= 0 ? 'text-green-400' : 'text-red-400'
-                        }`}>
-                          {change >= 0 ? '+' : ''}{change?.toFixed(2) || '--'}%
-                        </td>
-                      );
-                    })}
-                  </tr>
-                  <tr className="border-b border-gray-800">
-                    <td className="py-3 px-4 text-gray-400">IV Rank</td>
-                    {comparedSymbols.map(symbol => {
-                      const data = comparisonData[symbol]?.stockData;
-                      const ivRank = data?.ivRank || 0;
-                      return (
-                        <td key={symbol} className={`py-3 px-4 font-medium ${
-                          ivRank > 70 ? 'text-red-400' : 
-                          ivRank > 30 ? 'text-yellow-400' : 'text-green-400'
-                        }`}>
-                          {ivRank}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                  <tr className="border-b border-gray-800">
-                    <td className="py-3 px-4 text-gray-400">Flow Sentiment</td>
-                    {comparedSymbols.map(symbol => {
-                      const sentiment = comparisonData[symbol]?.marketConditions?.flowSentiment;
-                      return (
-                        <td key={symbol} className="py-3 px-4 font-medium capitalize">
-                          {sentiment === 'bullish' ? '🐂 Bullish' : 
-                           sentiment === 'bearish' ? '🐻 Bearish' : '➖ Neutral'}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
         
         {/* 0DTE Alert Box */}
         {(marketConditions?.has0DTE || zeroDTEData?.available) && (
@@ -964,11 +970,6 @@ export default function AIOptionsStrategy() {
             <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
               <Activity className="w-5 h-5 text-green-500" />
               Market Data for {selectedStock}
-              {dataSource === 'live' && (
-                <span className="text-xs bg-green-600/20 text-green-400 px-2 py-1 rounded ml-2">
-                  LIVE
-                </span>
-              )}
             </h2>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -1022,6 +1023,28 @@ export default function AIOptionsStrategy() {
                 </div>
               </div>
             </div>
+            
+            {/* Additional metrics if available */}
+            {stockData.shortInterestPercent && (
+              <div className="mt-4 pt-4 border-t border-gray-800 grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <div className="text-xs text-gray-500">Short Interest</div>
+                  <div className="text-sm font-medium">{stockData.shortInterestPercent?.toFixed(2)}%</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Days to Cover</div>
+                  <div className="text-sm font-medium">{stockData.daysTocover?.toFixed(1)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Cost to Borrow</div>
+                  <div className="text-sm font-medium">{stockData.costToBorrow?.toFixed(2)}%</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Utilization</div>
+                  <div className="text-sm font-medium">{stockData.utilizationRate?.toFixed(1)}%</div>
+                </div>
+              </div>
+            )}
           </div>
         )}
         
@@ -1031,9 +1054,6 @@ export default function AIOptionsStrategy() {
             <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
               <LineChart className="w-5 h-5 text-purple-500" />
               Live Greeks for {selectedStock} (ATM Options)
-              <span className="text-xs bg-purple-600/20 text-purple-400 px-2 py-1 rounded ml-2">
-                LIVE
-              </span>
             </h2>
             
             <div className="grid grid-cols-5 gap-4">
@@ -1082,13 +1102,8 @@ export default function AIOptionsStrategy() {
             <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
               <Target className="w-5 h-5 text-purple-500" />
               AI Recommended Strategies ({recommendations.length})
-              {dataSource === 'live' && (
-                <span className="text-xs bg-green-600/20 text-green-400 px-2 py-1 rounded">
-                  LIVE DATA
-                </span>
-              )}
               {recommendations.some(r => r.type === '0dte') && (
-                <span className="text-sm bg-yellow-600/20 text-yellow-400 px-2 py-1 rounded ml-2">
+                <span className="text-sm bg-yellow-600/20 text-yellow-400 px-2 py-1 rounded">
                   <Clock className="w-3 h-3 inline mr-1" />
                   0DTE Available
                 </span>
@@ -1240,26 +1255,34 @@ export default function AIOptionsStrategy() {
                       </div>
                     </div>
                   </div>
+                  
+                  <h3 className="font-medium mb-3 mt-4 text-gray-300">Greeks Profile</h3>
+                  <div className="bg-gray-800 rounded-lg p-4">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {Object.entries(selectedStrategy.greeks).map(([greek, value]) => (
+                        <div key={greek} className="flex justify-between">
+                          <span className="text-gray-500 capitalize">{greek}:</span>
+                          <span className={
+                            value === '+' || value === '++' || value === '+++' ? 'text-green-400' :
+                            value === '-' || value === '--' || value === '---' ? 'text-red-400' :
+                            value === '0' ? 'text-gray-400' : ''
+                          }>{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
               
-              {/* Risk Management */}
-              <div className="bg-gray-800 rounded-lg p-4">
-                <h3 className="font-medium mb-3 text-red-400">⚠️ Risk Management Rules</h3>
-                <ul className="space-y-2 text-sm text-gray-300">
-                  <li>• Set stop loss at 50% of max loss</li>
-                  <li>• Take profits at 50-75% of max profit</li>
-                  <li>• Never risk more than {maxRisk}% of account per trade</li>
-                  <li>• Monitor position at market open and 30 min before close</li>
-                  {selectedStrategy.type === '0dte' && (
-                    <li className="text-yellow-400">• ⚡ 0DTE: Must close before market close!</li>
-                  )}
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+              {/* Trade Builder Section */}
+              <div className={`bg-gray-800 rounded-lg p-4 mb-6 ${
+                selectedStrategy.type === '0dte' ? 'border-2 border-yellow-600' : ''
+              }`}>
+                <h3 className="font-medium mb-3 text-yellow-400">
+                  📋 Specific Trade Setup
+                  {selectedStrategy.type === '0dte' && ' - ⚡ EXPIRES TODAY!'}
+                </h3>
+                {(() => {
+                  const strikes = calculateStrikes(selectedStrategy);
+                  const details = selectedStrategy.calculate ? selectedStrategy.calculate(stockData) : {};
+                  const pos
