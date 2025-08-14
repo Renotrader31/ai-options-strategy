@@ -330,124 +330,138 @@ const generateRecommendations = (stockData, marketConditions, zeroDTEData) => {
   const changePercent = stockData?.changePercent || 0;
   const iv = stockData?.iv || 25;
   
-  // DIRECTIONAL STRATEGIES - Always include based on market movement
-  if (changePercent > 0.5) {
-    // Bullish movement
+  // Force variety by tracking what we've added
+  const addedTypes = new Set();
+  
+  // ALWAYS add at least one bullish and one bearish strategy
+  if (changePercent >= 0) {
+    // Market is up or flat - favor bullish strategies
     recommendations.push({
       ...strategies.longCall,
-      winRate: 45 + Math.min(Math.abs(changePercent) * 5, 20),
-      priority: 1,
-      reason: `📈 BULLISH MOMENTUM! Up ${changePercent.toFixed(2)}% - Ride the trend!`
+      winRate: 45 + Math.min(Math.abs(changePercent) * 5, 25),
+      priority: changePercent > 2 ? 1 : 2,
+      reason: changePercent > 2 
+        ? `📈 BULLISH MOMENTUM! Up ${changePercent.toFixed(2)}% - Ride the trend!`
+        : `📊 BULLISH SETUP - Potential breakout from current levels`
     });
-    recommendations.push({
-      ...strategies.bullPutSpread,
-      winRate: 65 + Math.min(Math.abs(changePercent) * 3, 15),
-      priority: 2,
-      reason: `💰 SELL PUTS! Collect premium with ${changePercent.toFixed(2)}% upward move`
-    });
-  } else if (changePercent < -0.5) {
-    // Bearish movement
-    recommendations.push({
-      ...strategies.longPut,
-      winRate: 45 + Math.min(Math.abs(changePercent) * 5, 20),
-      priority: 1,
-      reason: `📉 STRONG BEARISH! Down ${Math.abs(changePercent).toFixed(2)}% with low IV - Cheap puts!`
-    });
-    if (Math.abs(changePercent) > 2) {
+    addedTypes.add('longCall');
+    
+    // Add bull put spread for income
+    if (iv > 20) {
       recommendations.push({
-        ...strategies.zeroDTELongPut,
-        winRate: 35,
+        ...strategies.bullPutSpread,
+        winRate: 70,
         priority: 2,
-        reason: `⚡ 0DTE BEARISH! Stock down ${Math.abs(changePercent).toFixed(2)}% - Profit from continued selling!`
+        reason: `💰 INCOME PLAY! Sell puts to collect premium with ${changePercent >= 0 ? 'upward' : 'stable'} momentum`
       });
+      addedTypes.add('bullPutSpread');
     }
   } else {
-    // Neutral movement - add directional plays with lower priority
+    // Market is down - add bearish strategies
     recommendations.push({
-      ...strategies.longCall,
-      winRate: 45,
-      priority: 3,
-      reason: `📊 NEUTRAL MARKET - Potential breakout play`
+      ...strategies.longPut,
+      winRate: 45 + Math.min(Math.abs(changePercent) * 5, 25),
+      priority: 1,
+      reason: `📉 BEARISH SIGNAL! Down ${Math.abs(changePercent).toFixed(2)}% - Protect or profit from downside`
     });
+    addedTypes.add('longPut');
   }
   
-  // VOLATILITY STRATEGIES
-  if (iv > 40) {
+  // ALWAYS add Iron Condor if IV is reasonable
+  if (iv > 15) {
     recommendations.push({
       ...strategies.ironCondor,
-      winRate: 70 + Math.min((iv - 35) * 2, 15),
-      priority: 1,
-      reason: `🔥 HIGH IV (${iv.toFixed(1)}%)! Premium selling opportunity`
+      winRate: 68 + Math.min((iv - 20) * 0.5, 10),
+      priority: iv > 40 ? 1 : 3,
+      reason: iv > 40 
+        ? `🔥 HIGH IV (${iv.toFixed(1)}%)! Perfect for iron condor premium selling`
+        : `⚖️ BALANCED PLAY! Neutral iron condor for steady income`
     });
-    
-    if (iv > 55) {
-      recommendations.push({
-        ...strategies.jadeLizard,
-        winRate: 75,
-        priority: 1,
-        reason: `🦎 EXTREME IV (${iv.toFixed(1)}%)! Jade Lizard = NO UPSIDE RISK`
-      });
-    }
-  } else if (iv < 25) {
-    // Low IV - calendar spreads work well
+    addedTypes.add('ironCondor');
+  }
+  
+  // Add Jade Lizard for high IV
+  if (iv > 35 && !addedTypes.has('jadeLizard')) {
+    recommendations.push({
+      ...strategies.jadeLizard,
+      winRate: 75,
+      priority: 1,
+      reason: `🦎 HIGH IV PLAY (${iv.toFixed(1)}%)! Jade Lizard = NO UPSIDE RISK + Premium collection`
+    });
+    addedTypes.add('jadeLizard');
+  }
+  
+  // Calendar Spread - always good for time decay
+  if (!addedTypes.has('calendarSpread')) {
     recommendations.push({
       ...strategies.calendarSpread,
       winRate: 60,
-      priority: 2,
-      reason: `📅 LOW IV (${iv.toFixed(1)}%) - Calendar spread for IV expansion`
+      priority: iv < 30 ? 2 : 4,
+      reason: iv < 30 
+        ? `📅 LOW IV (${iv.toFixed(1)}%) - Perfect for calendar spread IV expansion play`
+        : `📅 TIME DECAY PLAY - Profit from time decay with calendar spread`
     });
+    addedTypes.add('calendarSpread');
   }
   
-  // 0DTE STRATEGIES - Always check for these
-  if (marketConditions?.has0DTE || zeroDTEData?.available || Math.random() > 0.3) {
-    if (changePercent > 1) {
+  // 0DTE Strategies - add based on momentum
+  const add0DTE = marketConditions?.has0DTE || zeroDTEData?.available || Math.random() > 0.5;
+  
+  if (add0DTE && !addedTypes.has('0dte')) {
+    if (changePercent > 0.5 || (changePercent > -0.5 && Math.random() > 0.5)) {
       recommendations.push({
         ...strategies.zeroDTELongCall,
         winRate: 35,
-        priority: 2,
-        reason: `⚡ 0DTE BULL! Up ${changePercent.toFixed(2)}% today - Momentum play`
+        priority: Math.abs(changePercent) > 2 ? 2 : 4,
+        reason: changePercent > 1 
+          ? `⚡ 0DTE MOMENTUM! Up ${changePercent.toFixed(2)}% - Intraday bull play`
+          : `⚡ 0DTE OPPORTUNITY! Quick intraday gains possible`
       });
-    } else if (changePercent < -1) {
+      addedTypes.add('0dte');
+    } else {
       recommendations.push({
         ...strategies.zeroDTELongPut,
         winRate: 35,
-        priority: 2,
-        reason: `⚡ 0DTE BEAR! Down ${Math.abs(changePercent).toFixed(2)}% - Profit from continued selling!`
+        priority: Math.abs(changePercent) > 2 ? 2 : 4,
+        reason: changePercent < -1
+          ? `⚡ 0DTE BEAR! Down ${Math.abs(changePercent).toFixed(2)}% - Profit from continued selling!`
+          : `⚡ 0DTE HEDGE! Quick downside protection`
+      });
+      addedTypes.add('0dte');
+    }
+  }
+  
+  // If we still need more strategies, add what's missing
+  if (recommendations.length < 5) {
+    if (!addedTypes.has('longPut') && changePercent <= 0) {
+      recommendations.push({
+        ...strategies.longPut,
+        winRate: 45,
+        priority: 5,
+        reason: `🛡️ HEDGE POSITION - Protect against potential downside`
+      });
+    }
+    
+    if (!addedTypes.has('longCall') && changePercent >= 0) {
+      recommendations.push({
+        ...strategies.longCall,
+        winRate: 45,
+        priority: 5,
+        reason: `📈 UPSIDE PLAY - Capture potential upward movement`
+      });
+    }
+    
+    if (!addedTypes.has('bullPutSpread')) {
+      recommendations.push({
+        ...strategies.bullPutSpread,
+        winRate: 65,
+        priority: 5,
+        reason: `💵 INCOME GENERATION - Consistent premium collection strategy`
       });
     }
   }
   
-  // ENSURE VARIETY - Add strategies not yet included
-  const strategyNames = recommendations.map(r => r.name);
-  
-  if (!strategyNames.includes('Iron Condor') && iv > 25) {
-    recommendations.push({
-      ...strategies.ironCondor,
-      winRate: 68,
-      priority: 3,
-      reason: `⚖️ BALANCED PLAY! Neutral iron condor for steady income`
-    });
-  }
-  
-  if (!strategyNames.includes('Calendar Spread')) {
-    recommendations.push({
-      ...strategies.calendarSpread,
-      winRate: 60,
-      priority: 4,
-      reason: `📅 TIME DECAY PLAY - Profit from time decay with calendar spread`
-    });
-  }
-  
-  if (!strategyNames.includes('Jade Lizard') && iv > 30) {
-    recommendations.push({
-      ...strategies.jadeLizard,
-      winRate: 70,
-      priority: 3,
-      reason: `🦎 NO UPSIDE RISK! Collect premium with defined downside`
-    });
-  }
-  
-  // Remove duplicates and sort
+  // Remove duplicates (shouldn't happen now but just in case)
   const uniqueRecommendations = Array.from(
     new Map(recommendations.map(item => [item.name, item])).values()
   );
@@ -458,7 +472,7 @@ const generateRecommendations = (stockData, marketConditions, zeroDTEData) => {
     return b.winRate - a.winRate;
   });
   
-  // Return top 5-6 strategies
+  // Return top 5-6 strategies for variety
   return uniqueRecommendations.slice(0, 6);
 };
 
