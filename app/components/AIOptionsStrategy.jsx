@@ -922,6 +922,7 @@ export default function AIOptionsStrategy() {
         )}
       </div>
     </div>
+    </div>
     {/* Strategy Detail Modal */}
     <StrategyModal 
       strategy={selectedStrategy} 
