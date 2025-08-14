@@ -12,16 +12,28 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
+    // Check if API key exists
+    if (!process.env.UNUSUAL_WHALES_API_KEY) {
+      console.error('UNUSUAL_WHALES_API_KEY not found in environment variables');
+      return NextResponse.json({
+        success: false,
+        useMock: true,
+        error: 'API key not configured'
+      });
+    }
+
     const headers = {
-  'Accept': 'application/json',
-  'Authorization': process.env.UNUSUAL_WHALES_API_KEY
-};
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${process.env.UNUSUAL_WHALES_API_KEY}` // Added Bearer prefix
+    };
+
+    console.log('Fetching data for symbol:', symbol);
 
     // Fetch multiple endpoints in parallel
     const [
       stockResponse,
       optionsVolumeResponse,
-      optionsExpiriesResponse,
+      optionsExpiriesResponse, // Fixed variable name
       greeksResponse,
       volatilityResponse,
       flowResponse
@@ -45,6 +57,35 @@ export async function POST(request) {
       fetch(`https://api.unusualwhales.com/api/stock/${symbol}/options/flow/recent?limit=100`, { headers })
     ]);
 
+    // Check if any requests failed
+    const failedRequests = [
+      { name: 'stock', response: stockResponse },
+      { name: 'optionsVolume', response: optionsVolumeResponse },
+      { name: 'optionsExpiries', response: optionsExpiriesResponse },
+      { name: 'greeks', response: greeksResponse },
+      { name: 'volatility', response: volatilityResponse },
+      { name: 'flow', response: flowResponse }
+    ].filter(req => !req.response.ok);
+
+    if (failedRequests.length > 0) {
+      console.error('Failed requests:', failedRequests.map(f => ({
+        name: f.name,
+        status: f.response.status,
+        statusText: f.response.statusText
+      })));
+      
+      // Try to get error details
+      const errorDetails = await failedRequests[0].response.text();
+      console.error('Error details:', errorDetails);
+      
+      return NextResponse.json({
+        success: false,
+        useMock: true,
+        error: `API request failed: ${failedRequests[0].name} - ${failedRequests[0].response.status}`,
+        details: errorDetails
+      });
+    }
+
     // Parse all responses
     const [
       stockData,
@@ -56,18 +97,20 @@ export async function POST(request) {
     ] = await Promise.all([
       stockResponse.json(),
       optionsVolumeResponse.json(),
-      expiriesResponse.json(),
+      optionsExpiriesResponse.json(), // Fixed to match variable name
       greeksResponse.json(),
       volatilityResponse.json(),
       flowResponse.json()
     ]);
+
+    console.log('Data fetched successfully');
 
     // Process stock data
     const latestPrice = stockData.data?.[0];
     const currentPrice = parseFloat(latestPrice?.close || 0);
     const prevClose = parseFloat(stockData.data?.[1]?.close || currentPrice);
     const change = currentPrice - prevClose;
-    const changePercent = (change / prevClose) * 100;
+    const changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
 
     // Process volatility and IV rank
     const currentVolatility = volatilityData.data;
@@ -87,14 +130,14 @@ export async function POST(request) {
       return expiryDate === today;
     });
 
-    // Analyze flow sentiment
+    // Analyze flow sentiment with null checks
     const flowSummary = flowData.data?.reduce((acc, flow) => {
       if (flow.tags?.includes('bullish')) acc.bullish++;
       if (flow.tags?.includes('bearish')) acc.bearish++;
       acc.totalPremium += parseFloat(flow.premium || 0);
       acc.totalVolume += parseInt(flow.size || 0);
       return acc;
-    }, { bullish: 0, bearish: 0, totalPremium: 0, totalVolume: 0 });
+    }, { bullish: 0, bearish: 0, totalPremium: 0, totalVolume: 0 }) || { bullish: 0, bearish: 0, totalPremium: 0, totalVolume: 0 };
 
     const flowSentiment = flowSummary.bullish > flowSummary.bearish ? 'bullish' : 
                          flowSummary.bearish > flowSummary.bullish ? 'bearish' : 'neutral';
@@ -184,15 +227,20 @@ export async function POST(request) {
     return NextResponse.json({
       success: false,
       useMock: true,
-      error: error.message
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }
 
 // GET method for testing
 export async function GET() {
+  const hasApiKey = !!process.env.UNUSUAL_WHALES_API_KEY;
+  
   return NextResponse.json({ 
     status: 'API route is working',
-    message: 'Use POST method with { symbol: "AAPL" } to get data'
+    message: 'Use POST method with { symbol: "AAPL" } to get data',
+    apiKeyConfigured: hasApiKey,
+    apiKeyPreview: hasApiKey ? `${process.env.UNUSUAL_WHALES_API_KEY.substring(0, 10)}...` : 'Not configured'
   });
 }
