@@ -977,7 +977,6 @@ const fetchData = useCallback(async (symbol) => {
 </div>
         </div>
       </header>
-      </header>
 
 {/* Settings Panel */}
 {showSettings && (
