@@ -916,10 +916,10 @@ export default function AIOptionsStrategy() {
                     )}
                   </div>
                 );
-              })}
-            </div>
-          </div>
-   })}
+        )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
