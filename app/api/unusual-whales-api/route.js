@@ -8,7 +8,7 @@ export async function GET(request) {
 
   try {
     const response = await fetch(
-      `https://api.unusualwhales.com/api/v1/options/flows/${symbol}?limit=20`,
+     'Authorization': `Bearer ${process.env.UW_API_KEY}`
       {
         headers: {
           'Authorization': `Bearer ${process.env.NEXT_PUBLIC_UW_API_KEY}`
