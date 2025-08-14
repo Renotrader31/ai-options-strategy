@@ -616,6 +616,16 @@ export default function AIOptionsStrategy() {
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [accountBalance, setAccountBalance] = useState(25000);
   const [maxRisk, setMaxRisk] = useState(2);
+  const [showSettings, setShowSettings] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareStrategies, setCompareStrategies] = useState([]);
+  const [dteFilter, setDteFilter] = useState(45);
+  const [minReturnFilter, setMinReturnFilter] = useState(10);
+  const [riskLevelFilter, setRiskLevelFilter] = useState('all');
+  const [strategyTypeFilter, setStrategyTypeFilter] = useState('all');
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [isScanning, setIsScanning] = useState(false);
   const [dataSource, setDataSource] = useState('mock'); // 'live' or 'mock'
   const [connectionStatus, setConnectionStatus] = useState('checking');
   
