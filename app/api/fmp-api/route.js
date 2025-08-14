@@ -8,7 +8,7 @@ export async function GET(request) {
 
   try {
     const response = await fetch(
-      `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${process.env.NEXT_PUBLIC_FMP_API_KEY}`
+      `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${process.env.FMP_API_KEY}`
     );
     
     const data = await response.json();
