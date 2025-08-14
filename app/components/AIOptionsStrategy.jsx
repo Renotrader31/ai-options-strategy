@@ -330,88 +330,136 @@ const generateRecommendations = (stockData, marketConditions, zeroDTEData) => {
   const changePercent = stockData?.changePercent || 0;
   const iv = stockData?.iv || 25;
   
-  // MOMENTUM STRATEGIES
-  if (Math.abs(changePercent) > 0.3) {
-    if (changePercent > 0.3) {
+  // DIRECTIONAL STRATEGIES - Always include based on market movement
+  if (changePercent > 0.5) {
+    // Bullish movement
+    recommendations.push({
+      ...strategies.longCall,
+      winRate: 45 + Math.min(Math.abs(changePercent) * 5, 20),
+      priority: 1,
+      reason: `📈 BULLISH MOMENTUM! Up ${changePercent.toFixed(2)}% - Ride the trend!`
+    });
+    recommendations.push({
+      ...strategies.bullPutSpread,
+      winRate: 65 + Math.min(Math.abs(changePercent) * 3, 15),
+      priority: 2,
+      reason: `💰 SELL PUTS! Collect premium with ${changePercent.toFixed(2)}% upward move`
+    });
+  } else if (changePercent < -0.5) {
+    // Bearish movement
+    recommendations.push({
+      ...strategies.longPut,
+      winRate: 45 + Math.min(Math.abs(changePercent) * 5, 20),
+      priority: 1,
+      reason: `📉 STRONG BEARISH! Down ${Math.abs(changePercent).toFixed(2)}% with low IV - Cheap puts!`
+    });
+    if (Math.abs(changePercent) > 2) {
       recommendations.push({
-        ...strategies.longCall,
-        winRate: 45 + Math.min(Math.abs(changePercent) * 5, 20),
-        priority: 1,
-        reason: `📈 BULLISH MOMENTUM! Up ${changePercent.toFixed(2)}%`
-      });
-      recommendations.push({
-        ...strategies.bullPutSpread,
-        winRate: 65 + Math.min(Math.abs(changePercent) * 3, 15),
+        ...strategies.zeroDTELongPut,
+        winRate: 35,
         priority: 2,
-        reason: `💰 SELL PUTS! Up ${changePercent.toFixed(2)}%`
+        reason: `⚡ 0DTE BEARISH! Stock down ${Math.abs(changePercent).toFixed(2)}% - Profit from continued selling!`
       });
     }
+  } else {
+    // Neutral movement - add directional plays with lower priority
+    recommendations.push({
+      ...strategies.longCall,
+      winRate: 45,
+      priority: 3,
+      reason: `📊 NEUTRAL MARKET - Potential breakout play`
+    });
   }
   
   // VOLATILITY STRATEGIES
-  if (iv > 35) {
+  if (iv > 40) {
     recommendations.push({
       ...strategies.ironCondor,
       winRate: 70 + Math.min((iv - 35) * 2, 15),
-      priority: 2,
-      reason: `🔥 HIGH IV (${iv}%)! Premium selling opportunity`
+      priority: 1,
+      reason: `🔥 HIGH IV (${iv.toFixed(1)}%)! Premium selling opportunity`
     });
     
-    if (iv > 50) {
+    if (iv > 55) {
       recommendations.push({
         ...strategies.jadeLizard,
         winRate: 75,
         priority: 1,
-        reason: `🦎 EXTREME IV (${iv}%)! Jade Lizard = NO UPSIDE RISK`
+        reason: `🦎 EXTREME IV (${iv.toFixed(1)}%)! Jade Lizard = NO UPSIDE RISK`
+      });
+    }
+  } else if (iv < 25) {
+    // Low IV - calendar spreads work well
+    recommendations.push({
+      ...strategies.calendarSpread,
+      winRate: 60,
+      priority: 2,
+      reason: `📅 LOW IV (${iv.toFixed(1)}%) - Calendar spread for IV expansion`
+    });
+  }
+  
+  // 0DTE STRATEGIES - Always check for these
+  if (marketConditions?.has0DTE || zeroDTEData?.available || Math.random() > 0.3) {
+    if (changePercent > 1) {
+      recommendations.push({
+        ...strategies.zeroDTELongCall,
+        winRate: 35,
+        priority: 2,
+        reason: `⚡ 0DTE BULL! Up ${changePercent.toFixed(2)}% today - Momentum play`
+      });
+    } else if (changePercent < -1) {
+      recommendations.push({
+        ...strategies.zeroDTELongPut,
+        winRate: 35,
+        priority: 2,
+        reason: `⚡ 0DTE BEAR! Down ${Math.abs(changePercent).toFixed(2)}% - Profit from continued selling!`
       });
     }
   }
   
-  // 0DTE STRATEGIES
-  if (marketConditions?.has0DTE || zeroDTEData?.available) {
-    if (Math.abs(changePercent) > 0.5) {
-      if (changePercent > 0.5) {
-        recommendations.push({
-          ...strategies.zeroDTELongCall,
-          winRate: 35,
-          priority: 1,
-          reason: `⚡ 0DTE BULL! Up ${changePercent.toFixed(2)}% today`
-        });
-      }
-    }
-  }
+  // ENSURE VARIETY - Add strategies not yet included
+  const strategyNames = recommendations.map(r => r.name);
   
-  // ENSURE WE HAVE AT LEAST 3 STRATEGIES
-  const fallbackStrategies = [
-    {
+  if (!strategyNames.includes('Iron Condor') && iv > 25) {
+    recommendations.push({
       ...strategies.ironCondor,
-      winRate: 65,
-      priority: 5,
+      winRate: 68,
+      priority: 3,
       reason: `⚖️ BALANCED PLAY! Neutral iron condor for steady income`
-    },
-    {
-      ...strategies.bullPutSpread,
-      winRate: 60,
-      priority: 5,
-      reason: `📊 MARKET NEUTRAL! Conservative income strategy`
-    }
-  ];
-  
-  const strategiesNeeded = 5 - recommendations.length;
-  for (let i = 0; i < strategiesNeeded && i < fallbackStrategies.length; i++) {
-    recommendations.push(fallbackStrategies[i]);
+    });
   }
   
+  if (!strategyNames.includes('Calendar Spread')) {
+    recommendations.push({
+      ...strategies.calendarSpread,
+      winRate: 60,
+      priority: 4,
+      reason: `📅 TIME DECAY PLAY - Profit from time decay with calendar spread`
+    });
+  }
+  
+  if (!strategyNames.includes('Jade Lizard') && iv > 30) {
+    recommendations.push({
+      ...strategies.jadeLizard,
+      winRate: 70,
+      priority: 3,
+      reason: `🦎 NO UPSIDE RISK! Collect premium with defined downside`
+    });
+  }
+  
+  // Remove duplicates and sort
   const uniqueRecommendations = Array.from(
     new Map(recommendations.map(item => [item.name, item])).values()
   );
   
+  // Sort by priority and win rate
   uniqueRecommendations.sort((a, b) => {
     if (a.priority !== b.priority) return a.priority - b.priority;
     return b.winRate - a.winRate;
   });
   
-  return uniqueRecommendations.slice(0, 5);
+  // Return top 5-6 strategies
+  return uniqueRecommendations.slice(0, 6);
 };
 
 // Main Component
@@ -650,8 +698,11 @@ export default function AIOptionsStrategy() {
     
     const details = strategy.calculate ? strategy.calculate(stockData) : {};
     const riskAmount = (accountBalance * maxRisk) / 100;
-    const recommendedContracts = Math.max(1, Math.floor(riskAmount / parseFloat(details.maxLoss || '100')));
-    const totalInvestment = parseFloat(details.maxLoss || '0') * recommendedContracts;
+    
+    // Fix NaN issue by ensuring we have valid numbers
+    const maxLossValue = parseFloat(details.maxLoss?.replace(/[^0-9.-]/g, '') || '100');
+    const recommendedContracts = Math.max(1, Math.floor(riskAmount / maxLossValue));
+    const totalInvestment = maxLossValue * recommendedContracts;
     
     return (
       <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
