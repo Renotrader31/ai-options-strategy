@@ -919,15 +919,18 @@ export default function AIOptionsStrategy() {
               })}
             </div>
           </div>
-        )}
+      )}
       </div>
     </div>
     </div>
+    </div>
+    
     {/* Strategy Detail Modal */}
-     <StrategyModal
+    <StrategyModal
       strategy={selectedStrategy}
-     isOpen={!!selectedStrategy}
-       onClose={() => setSelectedStrategy(null)}
-     />
+      isOpen={!!selectedStrategy}
+      onClose={() => setSelectedStrategy(null)}
+    />
+  </div>
   );
 }
