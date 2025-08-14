@@ -8,10 +8,11 @@ export async function GET(request) {
 
   try {
     const response = await fetch(
-     'Authorization': `Bearer ${process.env.UW_API_KEY}`
+      `https://api.unusualwhales.com/api/v1/options/flows/${symbol}?limit=20`,
       {
         headers: {
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_UW_API_KEY}`
+        'Authorization': `Bearer ${process.env.UW_API_KEY}`
+}
         }
       }
     );
