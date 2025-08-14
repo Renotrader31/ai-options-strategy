@@ -776,74 +776,106 @@ export default function AIOptionsStrategy() {
   };
 
   // Fetch data for a symbol with live API integration
-  const fetchData = useCallback(async (symbol) => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      console.log('Fetching live data for:', symbol);
-      
-      // Get next expiry for options
-      const nextExpiry = getNextExpiry();
-      
-      // Call our API route with Greeks request
-      const response = await fetch('/api/market', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json' 
-        },
-        body: JSON.stringify({ 
-          symbol,
-          includeGreeks: true,
-          expiry: nextExpiry
-        })
+  // Find this section in your AIOptionsStrategy.jsx file and REPLACE it:
+
+// Fetch data for a symbol
+const fetchData = useCallback(async (symbol) => {
+  setIsLoading(true);
+  setIsScanning(true);
+  setScanProgress(0);
+  setError(null);
+  
+  try {
+    // Simulate scanning progress
+    const progressInterval = setInterval(() => {
+      setScanProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return 100;
+        }
+        return prev + 10;
       });
-      
-      console.log('API Response status:', response.status);
-      
-      const result = await response.json();
-      console.log('API Result:', result);
-      
-      if (result.success && !result.useMock) {
-        // Use real data from API
-        console.log('Using LIVE data for', symbol);
-        setDataSource('live');
-        setConnectionStatus('connected');
-        setStockData(result.stockData);
-        setMarketConditions(result.marketConditions);
-        setGreeksData(result.greeksData);
-        setZeroDTEData(result.zeroDTEData);
-        const recs = generateRecommendations(result.stockData, result.marketConditions, result.zeroDTEData);
-        console.log('Generated recommendations:', recs.length);
-        setRecommendations(recs);
-      } else {
-        // Fall back to mock data
-        console.log('Using MOCK data for', symbol);
-        setDataSource('mock');
-        setConnectionStatus('fallback');
-        const data = generateMockData(symbol);
-        setStockData(data.stockData);
-        setMarketConditions(data.marketConditions);
-        setGreeksData(data.greeksData);
-        setZeroDTEData(data.zeroDTEData);
-        setRecommendations(generateRecommendations(data.stockData, data.marketConditions, data.zeroDTEData));
-      }
-      
-    } catch (err) {
-      console.error('Fetch error:', err);
-      setError('Failed to load data - using fallback');
-      setDataSource('mock');
-      setConnectionStatus('disconnected');
-      // Use mock data as fallback
-      const data = generateMockData(symbol);
-      setStockData(data.stockData);
-      setMarketConditions(data.marketConditions);
-      setGreeksData(data.greeksData);
-      setZeroDTEData(data.zeroDTEData);
-      setRecommendations(generateRecommendations(data.stockData, data.marketConditions, data.zeroDTEData));
-    } finally {
-      setIsLoading(false);
+    }, 100);
+    
+    // ====== THIS IS THE NEW PART - CALLING YOUR API ======
+    // Call the API route for LIVE DATA
+    const response = await fetch('/api/market', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ symbol })
+    });
+    
+    const result = await response.json();
+    
+    let data;
+    
+    if (result.success && !result.useMock) {
+      // Use REAL LIVE DATA from Unusual Whales
+      console.log('🚀 Using LIVE Unusual Whales data for', symbol);
+      data = result;
+    } else {
+      // Fall back to mock data if API fails
+      console.log('📊 Using MOCK data for', symbol);
+      data = generateMockData(symbol);
     }
+    
+    // Set all the state with either real or mock data
+    setStockData(data.stockData);
+    setMarketConditions(data.marketConditions);
+    setGreeksData(data.greeksData);
+    setZeroDTEData(data.zeroDTEData);
+    // ====== END OF NEW PART ======
+    
+    // Generate recommendations and apply filters
+    let recs = generateRecommendations(data.stockData, data.marketConditions, data.zeroDTEData);
+    
+    // Apply filters
+    recs = recs.filter(rec => {
+      // DTE filter
+      const recDte = rec.dte || 30;
+      if (recDte > dteFilter) return false;
+      
+      // Return filter
+      const recReturn = rec.expectedReturn || 20;
+      if (recReturn < minReturnFilter) return false;
+      
+      // Risk level filter
+      if (riskLevelFilter !== 'all' && rec.riskLevel !== riskLevelFilter) return false;
+      
+      // Strategy type filter
+      if (strategyTypeFilter !== 'all' && rec.type !== strategyTypeFilter) return false;
+      
+      return true;
+    });
+    
+    setRecommendations(recs.slice(0, 5));
+    
+    clearInterval(progressInterval);
+    setScanProgress(100);
+    setTimeout(() => {
+      setIsScanning(false);
+      setScanProgress(0);
+    }, 500);
+  } catch (err) {
+    console.error('Fetch error:', err);
+    setError('Failed to load data - using demo data');
+    
+    // Use mock data as fallback on error
+    const data = generateMockData(symbol);
+    setStockData(data.stockData);
+    setMarketConditions(data.marketConditions);
+    setGreeksData(data.greeksData);
+    setZeroDTEData(data.zeroDTEData);
+    setRecommendations(generateRecommendations(data.stockData, data.marketConditions, data.zeroDTEData));
+    
+    setIsScanning(false);
+    setScanProgress(0);
+  } finally {
+    setIsLoading(false);
+  }
+}, [dteFilter, minReturnFilter, riskLevelFilter, strategyTypeFilter]);
   }, []);
 
   // Load initial data
