@@ -13,9 +13,9 @@ export async function POST(request) {
     }
 
     const headers = {
-      'Accept': 'application/json',
-      'Authorization': process.env.UW_TOKEN
-    };
+  'Accept': 'application/json',
+  'Authorization': process.env.UNUSUAL_WHALES_API_KEY
+};
 
     // Fetch multiple endpoints in parallel
     const [
