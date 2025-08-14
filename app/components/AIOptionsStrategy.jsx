@@ -977,7 +977,96 @@ const fetchData = useCallback(async (symbol) => {
 </div>
         </div>
       </header>
-      
+      </header>
+
+{/* Settings Panel */}
+{showSettings && (
+  <div className="bg-gray-800 border-b border-gray-700 px-6 py-4">
+    <h3 className="text-lg font-bold mb-4">Advanced Filters</h3>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div>
+        <label className="text-sm text-gray-400 block mb-1">Account Balance</label>
+        <input
+          type="number"
+          value={accountBalance}
+          onChange={(e) => setAccountBalance(Number(e.target.value))}
+          className="w-full px-2 py-1 bg-gray-700 rounded text-white"
+        />
+      </div>
+      <div>
+        <label className="text-sm text-gray-400 block mb-1">Max Risk %</label>
+        <input
+          type="number"
+          value={maxRisk}
+          onChange={(e) => setMaxRisk(Number(e.target.value))}
+          className="w-full px-2 py-1 bg-gray-700 rounded text-white"
+          min="1" max="10"
+        />
+      </div>
+      <div>
+        <label className="text-sm text-gray-400 block mb-1">DTE Filter: {dteFilter} days</label>
+        <input
+          type="range"
+          value={dteFilter}
+          onChange={(e) => setDteFilter(Number(e.target.value))}
+          className="w-full"
+          min="0" max="90"
+        />
+      </div>
+      <div>
+        <label className="text-sm text-gray-400 block mb-1">Min Return: {minReturnFilter}%</label>
+        <input
+          type="range"
+          value={minReturnFilter}
+          onChange={(e) => setMinReturnFilter(Number(e.target.value))}
+          className="w-full"
+          min="0" max="100"
+        />
+      </div>
+    </div>
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+      <div>
+        <label className="text-sm text-gray-400 block mb-1">Risk Level</label>
+        <select
+          value={riskLevelFilter}
+          onChange={(e) => setRiskLevelFilter(e.target.value)}
+          className="w-full px-2 py-1 bg-gray-700 rounded text-white"
+        >
+          <option value="all">All</option>
+          <option value="low">Low</option>
+          <option value="moderate">Moderate</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-sm text-gray-400 block mb-1">Strategy Type</label>
+        <select
+          value={strategyTypeFilter}
+          onChange={(e) => setStrategyTypeFilter(e.target.value)}
+          className="w-full px-2 py-1 bg-gray-700 rounded text-white"
+        >
+          <option value="all">All Types</option>
+          <option value="directional">Directional</option>
+          <option value="neutral">Neutral</option>
+          <option value="income">Income</option>
+          <option value="volatility">Volatility</option>
+          <option value="0dte">0DTE Only</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-sm text-gray-400 block mb-1">Auto Refresh</label>
+        <button
+          onClick={() => setAutoRefresh(!autoRefresh)}
+          className={`w-full px-2 py-1 rounded ${autoRefresh ? 'bg-green-600' : 'bg-gray-700'}`}
+        >
+          {autoRefresh ? 'ON (30s)' : 'OFF'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Rest of your content continues here */}
       {/* Error Alert */}
       {error && (
         <div className="mx-6 mt-4 bg-yellow-900/20 border border-yellow-800 rounded-lg p-4">
