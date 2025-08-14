@@ -13,7 +13,7 @@ export async function GET(request) {
         headers: {
         'Authorization': `Bearer ${process.env.UW_API_KEY}`
 }
-        }
+        },
       }
     );
     
