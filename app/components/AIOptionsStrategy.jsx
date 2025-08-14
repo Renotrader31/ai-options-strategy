@@ -951,16 +951,30 @@ const fetchData = useCallback(async (symbol) => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <ConnectionStatus />
-            <button 
-              onClick={() => fetchData(selectedStock)}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          </div>
+        <div className="flex items-center gap-3">
+  <ConnectionStatus />
+  <button 
+    onClick={() => setCompareMode(!compareMode)}
+    className={`p-2 ${compareMode ? 'bg-green-600' : 'bg-gray-800'} rounded-lg`}
+    title="Compare Strategies"
+  >
+    <BarChart3 className="w-5 h-5" />
+  </button>
+  <button 
+    onClick={() => setShowSettings(!showSettings)}
+    className={`p-2 ${showSettings ? 'bg-purple-600' : 'bg-gray-800'} rounded-lg`}
+    title="Advanced Settings"
+  >
+    <Sliders className="w-5 h-5" />
+  </button>
+  <button
+    onClick={() => fetchData(selectedStock)}
+    className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
+  >
+    <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+    Refresh
+  </button>
+</div>
         </div>
       </header>
       
