@@ -876,7 +876,6 @@ const fetchData = useCallback(async (symbol) => {
     setIsLoading(false);
   }
 }, [dteFilter, minReturnFilter, riskLevelFilter, strategyTypeFilter]);
-  }, []);
 
   // Load initial data
   useEffect(() => {
