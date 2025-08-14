@@ -4,9 +4,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Brain, TrendingUp, Activity, Shield, Zap,
   DollarSign, Target, AlertCircle, BarChart3, Sparkles,
-  ArrowUpRight, ArrowDownRight, Info, ChevronRight,
+  ArrowUpRight, ArrowDownRight, ChevronRight,
   Search, RefreshCw, Award, Flame, X,
-  LineChart, Loader, AlertTriangle, TrendingDown, Clock, Wifi, WifiOff
+  LineChart, Loader, AlertTriangle, Clock,
+  Settings, Sliders  // Add these if missing
 } from 'lucide-react';
 
 // Mock data generator for fallback
