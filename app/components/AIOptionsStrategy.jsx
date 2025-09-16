@@ -8,8 +8,10 @@ import {
   Search, RefreshCw, Award, Flame, X,
   LineChart, Loader, AlertTriangle, Clock,
   Settings, Sliders, Wifi, WifiOff, GitCompare,
-  Plus, Minus, Check, Star
+  Plus, Minus, Check, Star, Briefcase
 } from 'lucide-react';
+
+import PortfolioTracker from './PortfolioTracker.jsx';
 
 // Mock data generator for fallback
 const generateMockData = (symbol) => {
@@ -494,6 +496,10 @@ export default function AIOptionsStrategy() {
   const [dataSource, setDataSource] = useState('checking');
   const [connectionStatus, setConnectionStatus] = useState('checking');
   
+  // Portfolio Tracker states
+  const [showPortfolioTracker, setShowPortfolioTracker] = useState(false);
+  const [portfolioStrategyToAdd, setPortfolioStrategyToAdd] = useState(null);
+  
   const [stockData, setStockData] = useState(null);
   const [marketConditions, setMarketConditions] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
@@ -894,10 +900,22 @@ export default function AIOptionsStrategy() {
             
             {/* Action Buttons */}
             <div className="flex gap-3 mt-6">
-              <button className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg font-semibold transition-all transform hover:scale-105">
-                Build This Strategy
+              <button 
+                onClick={() => {
+                  setPortfolioStrategyToAdd(strategy);
+                  setShowPortfolioTracker(true);
+                }}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg font-semibold transition-all transform hover:scale-105"
+              >
+                Add to Portfolio
               </button>
-              <button className="flex-1 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg font-semibold transition-colors">
+              <button 
+                onClick={() => {
+                  setPortfolioStrategyToAdd(strategy);
+                  setShowPortfolioTracker(true);
+                }}
+                className="flex-1 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg font-semibold transition-colors"
+              >
                 Paper Trade First
               </button>
               <button 
@@ -1041,6 +1059,13 @@ export default function AIOptionsStrategy() {
           
           <div className="flex items-center gap-3">
             <ConnectionStatus />
+            <button 
+              onClick={() => setShowPortfolioTracker(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-all"
+            >
+              <Briefcase className="w-4 h-4" />
+              Portfolio
+            </button>
             <button 
               onClick={toggleCompareMode}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
@@ -1284,6 +1309,16 @@ export default function AIOptionsStrategy() {
         strategy={selectedStrategy}
         isOpen={!!selectedStrategy}
         onClose={() => setSelectedStrategy(null)}
+      />
+      
+      {/* Portfolio Tracker Modal */}
+      <PortfolioTracker 
+        isOpen={showPortfolioTracker}
+        onClose={() => {
+          setShowPortfolioTracker(false);
+          setPortfolioStrategyToAdd(null);
+        }}
+        initialStrategy={portfolioStrategyToAdd}
       />
     </div>
   );
