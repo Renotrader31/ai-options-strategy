@@ -248,7 +248,18 @@ export default function PortfolioTracker({ isOpen, onClose, initialStrategy = nu
     if (savedPortfolios) {
       try {
         const parsed = JSON.parse(savedPortfolios);
-        setPortfolios(parsed);
+        // Ensure parsed data is valid
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Validate each portfolio has required structure
+          const validPortfolios = parsed.map(portfolio => ({
+            ...createDefaultPortfolio(),
+            ...portfolio,
+            trades: Array.isArray(portfolio.trades) ? portfolio.trades : []
+          }));
+          setPortfolios(validPortfolios);
+        } else {
+          setPortfolios([createDefaultPortfolio()]);
+        }
       } catch (e) {
         console.error('Error parsing saved portfolios:', e);
         setPortfolios([createDefaultPortfolio()]);
@@ -307,27 +318,36 @@ export default function PortfolioTracker({ isOpen, onClose, initialStrategy = nu
   const validateTradeForm = () => {
     const errors = [];
     
-    if (!tradeForm.symbol.trim()) {
+    // Basic validation
+    if (!tradeForm.symbol || !tradeForm.symbol.trim()) {
       errors.push('Symbol is required');
     }
 
-    if (tradeForm.type === TRADE_TYPES.SPREAD) {
-      const spreadRule = SPREAD_VALIDATION_RULES[tradeForm.spreadType];
-      if (spreadRule && spreadRule.validation) {
-        const spreadErrors = spreadRule.validation(tradeForm);
-        errors.push(...spreadErrors);
+    // Type-specific validation with better error handling
+    try {
+      if (tradeForm.type === TRADE_TYPES.SPREAD) {
+        const spreadRule = SPREAD_VALIDATION_RULES[tradeForm.spreadType];
+        if (spreadRule && typeof spreadRule.validation === 'function') {
+          const spreadErrors = spreadRule.validation(tradeForm);
+          if (Array.isArray(spreadErrors)) {
+            errors.push(...spreadErrors);
+          }
+        }
+      } else if (tradeForm.type === TRADE_TYPES.OPTION) {
+        if (!tradeForm.strike || parseFloat(tradeForm.strike) <= 0) {
+          errors.push('Strike price must be greater than 0');
+        }
+        if (!tradeForm.expiry) {
+          errors.push('Expiration date is required');
+        }
+      } else if (tradeForm.type === TRADE_TYPES.STOCK) {
+        if (!tradeForm.price || parseFloat(tradeForm.price) <= 0) {
+          errors.push('Stock price must be greater than 0');
+        }
       }
-    } else if (tradeForm.type === TRADE_TYPES.OPTION) {
-      if (!tradeForm.strike || parseFloat(tradeForm.strike) <= 0) {
-        errors.push('Strike price must be greater than 0');
-      }
-      if (!tradeForm.expiry) {
-        errors.push('Expiration date is required');
-      }
-    } else if (tradeForm.type === TRADE_TYPES.STOCK) {
-      if (!tradeForm.price || parseFloat(tradeForm.price) <= 0) {
-        errors.push('Stock price must be greater than 0');
-      }
+    } catch (validationError) {
+      console.error('Validation error:', validationError);
+      errors.push('Validation error occurred. Please check your inputs.');
     }
 
     if (!tradeForm.quantity || parseInt(tradeForm.quantity) <= 0) {
@@ -349,12 +369,23 @@ export default function PortfolioTracker({ isOpen, onClose, initialStrategy = nu
       id: Date.now().toString(),
       ...tradeForm,
       timestamp: new Date().toISOString(),
-      portfolioId: portfolios[activePortfolio].id
+      portfolioId: portfolios[activePortfolio]?.id || 'default'
     };
 
     setPortfolios(prev => {
       const updated = [...prev];
+      // Ensure the portfolio exists and has a trades array
+      if (!updated[activePortfolio]) {
+        updated[activePortfolio] = createDefaultPortfolio();
+      }
+      if (!updated[activePortfolio].trades) {
+        updated[activePortfolio].trades = [];
+      }
       updated[activePortfolio].trades.push(newTrade);
+      
+      // Log for debugging
+      console.log('Trade saved to browser storage - Total trades:', updated[activePortfolio].trades.length);
+      
       return updated;
     });
 
@@ -413,7 +444,17 @@ export default function PortfolioTracker({ isOpen, onClose, initialStrategy = nu
     }
   };
 
-  const getCurrentPortfolio = () => portfolios[activePortfolio] || createDefaultPortfolio();
+  const getCurrentPortfolio = () => {
+    const portfolio = portfolios[activePortfolio];
+    if (!portfolio) {
+      return createDefaultPortfolio();
+    }
+    // Ensure trades array exists
+    return {
+      ...portfolio,
+      trades: Array.isArray(portfolio.trades) ? portfolio.trades : []
+    };
+  };
 
   const renderTradeForm = () => (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
